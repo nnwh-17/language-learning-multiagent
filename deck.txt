@@ -1,0 +1,18 @@
+#separator:tab
+#html:true
+#tags column:3
+土曜日	どようび<br>Saturday	vocab N5
+起きる	おきる<br>to wake up	vocab N5
+朝ご飯	あさごはん<br>breakfast	vocab N5
+食べる	たべる<br>to eat	vocab N5
+友達	ともだち<br>friend	vocab N5
+公園	こうえん<br>park	vocab N5
+行く	いく<br>to go	vocab N5
+サッカー	さっかー<br>soccer	vocab N5
+写真	しゃしん<br>photograph	vocab N5
+撮る	とる<br>to take (a photo)	vocab N5
+天気	てんき<br>weather	vocab N5
+楽しい	たのしい<br>fun, enjoyable	vocab N5
+～てから	After doing something; used to say one action happens before another.<br><br>Example: 朝ご飯を食べてから、友達と公園へ行きました。	grammar
+～たり～たりする	Listing representative actions among others (for example, A and B, among other things).<br><br>Example: 公園でサッカーをしたり、写真を撮ったりしました。	grammar
+～ので	Because / since; gives the reason for the following statement.<br><br>Example: 天気がよかったので、とても楽しかったです。	grammar
