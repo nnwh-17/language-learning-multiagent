@@ -1,0 +1,16 @@
+# Agent framework (full package, includes MCP client support)
+pydantic-ai
+ 
+# Anki deck export (.apkg)
+genanki
+ 
+# Load API keys from a .env file
+python-dotenv
+ 
+# Build your own small MCP server (dictionary lookup)
+mcp
+ 
+# Tests
+pytest
+
+uv
