@@ -1,0 +1,23 @@
+#separator:tab
+#html:true
+#tags column:3
+昨日	きのう<br>yesterday	vocab N5
+友達	ともだち<br>friend	vocab N5
+一緒	いっしょ<br>together	vocab N5
+新しい	あたらしい<br>new	vocab N5
+カフェ	かふぇ<br>cafe	vocab N5
+行く	いく<br>to go	vocab N5
+飲む	のむ<br>to drink	vocab N5
+将来	しょうらい<br>future	vocab N3
+計画	けいかく<br>plan	vocab N3
+話す	はなす<br>to speak, to talk	vocab N5
+来年	らいねん<br>next year	vocab N5
+留学	りゅうがく<br>study abroad	vocab N4
+日本語	にほんご<br>Japanese language	vocab N5
+上手	じょうず<br>skillful, good at	vocab N5
+毎日	まいにち<br>every day	vocab N5
+勉強	べんきょう<br>study	vocab N5
+～ながら	While doing something; two actions performed at the same time by the same subject.<br><br>Example: コーヒーを飲みながら、将来の計画について話しました。	grammar
+～つもりです	Intend to do something; expresses a plan or intention.<br><br>Example: 私は来年、日本に留学するつもりです。	grammar
+～はまだ～ではありません	Not yet; expresses that a state has not reached a certain level yet.<br><br>Example: 日本語はまだ上手ではありませんが、毎日勉強しています。	grammar
+～ている (ongoing action)	Expresses a repeated or ongoing action, here daily habit.<br><br>Example: 毎日勉強しています。	grammar
