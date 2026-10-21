@@ -69,6 +69,14 @@ def _():
     return "食べる -> to eat"
 
 
+@check("architecture diagram matches agents")
+def _():
+    from jplearn.architecture import check_against_agents
+
+    if problems := check_against_agents():
+        raise RuntimeError("; ".join(problems) + " - update src/jplearn/architecture.py")
+
+
 if "--live" in sys.argv:
 
     @check("LLM round trip")

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastmcp.client.transports import StdioTransport
-from pydantic_ai.mcp import MCPToolset
+from pydantic_ai.mcp import MCPToolset, ProcessToolCallback
 
 load_dotenv()
 
@@ -33,7 +33,9 @@ FLASHCARD_TOOLS = {
 }
 
 
-def anki_toolset(read_only: bool = False) -> MCPToolset:
+def anki_toolset(
+    read_only: bool = False, process_tool_call: ProcessToolCallback | None = None
+) -> MCPToolset:
     """Launch the Anki MCP server over stdio. Use it as `async with toolset:` or pass to an Agent."""
     npx = shutil.which("npx")
     if npx is None:
@@ -45,9 +47,15 @@ def anki_toolset(read_only: bool = False) -> MCPToolset:
         command=npx, args=["-y", ANKI_MCP_PACKAGE, "--stdio"], env=env, log_file=LOG_FILE
     )
     # First run downloads the npm package, so allow a generous start-up time
-    return MCPToolset(transport, id="anki", init_timeout=120)
+    return MCPToolset(
+        transport, id="anki", init_timeout=120, process_tool_call=process_tool_call
+    )
 
 
-def flashcard_toolset(read_only: bool = False, tools: set[str] = FLASHCARD_TOOLS):
+def flashcard_toolset(
+    read_only: bool = False,
+    tools: set[str] = FLASHCARD_TOOLS,
+    process_tool_call: ProcessToolCallback | None = None,
+):
     """Anki toolset limited to deck/note tools."""
-    return anki_toolset(read_only).filtered(lambda ctx, tool_def: tool_def.name in tools)
+    return anki_toolset(read_only, process_tool_call).filtered(lambda ctx, tool_def: tool_def.name in tools)

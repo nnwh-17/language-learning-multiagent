@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 
+from jplearn.activity import track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.agents.flashcards import Card, CardDraft, add_cards, flashcard_agent
 from jplearn.config import get_model
@@ -53,7 +54,8 @@ orchestrator = Agent(
 async def analyze_japanese(ctx: RunContext, text: str) -> Breakdown:
     """Break down Japanese text: translation, each word's reading, dictionary form and
     meaning, and the grammar points used. Pass the Japanese text only."""
-    result = await analyzer.run(text, usage=ctx.usage)
+    with track("analyzer"):
+        result = await analyzer.run(text, usage=ctx.usage)
     return result.output
 
 
@@ -61,21 +63,24 @@ async def analyze_japanese(ctx: RunContext, text: str) -> Breakdown:
 def lookup_word(word: str, reading: str | None = None) -> list[DictEntry]:
     """Look up a Japanese word in JMdict. `word` is the dictionary form in kanji or kana;
     `reading` (hiragana) optionally narrows homographs. Returns up to 3 entries."""
-    return lookup(word, reading)
+    with track("jmdict"):
+        return lookup(word, reading)
 
 
 @orchestrator.tool
 async def draft_flashcards(ctx: RunContext, request: str) -> CardDraft:
     """Draft Anki flashcards. `request` is the Japanese text (or words) to make cards from,
     plus any wishes from the user such as deck name or 'grammar only'."""
-    result = await flashcard_agent.run(request, usage=ctx.usage)
+    with track("flashcards"):
+        result = await flashcard_agent.run(request, usage=ctx.usage)
     return result.output
 
 
 @orchestrator.tool_plain(requires_approval=True)
 async def add_flashcards(deck: str, cards: list[Card]) -> dict:
     """Add flashcards to the user's Anki deck. Requires the user's approval."""
-    return await add_cards(deck, cards)
+    with track("anki_write"):
+        return await add_cards(deck, cards)
 
 
 def tools_used(messages: list[ModelMessage]) -> list[str]:

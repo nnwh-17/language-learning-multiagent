@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
+from jplearn.activity import track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.anki import anki_toolset, flashcard_toolset
 from jplearn.config import get_model
@@ -45,18 +46,28 @@ You make Anki flashcards for an English-speaking learner of Japanese.
 You only draft cards; you cannot add them.
 """
 
+
+async def track_anki_read(ctx, call_tool, name, args):
+    """Mark the read-only Anki MCP as running while one of its tools is called."""
+    with track("anki_read"):
+        return await call_tool(name, args)
+
+
 flashcard_agent = Agent(
     get_model(),
     output_type=CardDraft,
     instructions=INSTRUCTIONS,
-    toolsets=[flashcard_toolset(read_only=True, tools={"findNotes"})],
+    toolsets=[
+        flashcard_toolset(read_only=True, tools={"findNotes"}, process_tool_call=track_anki_read)
+    ],
 )
 
 
 @flashcard_agent.tool
 async def break_down(ctx: RunContext, text: str) -> Breakdown:
     """Break Japanese text into words (with JMdict meanings) and grammar points."""
-    result = await analyzer.run(text, usage=ctx.usage)
+    with track("analyzer"):
+        result = await analyzer.run(text, usage=ctx.usage)
     return result.output
 
 

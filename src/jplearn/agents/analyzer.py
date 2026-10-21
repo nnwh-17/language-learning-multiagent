@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
+from jplearn.activity import track
 from jplearn.config import get_model
 from jplearn.dictionary import lookup
 from jplearn.tokenizer import Token, tokenize
@@ -66,10 +67,13 @@ analyzer = Agent(
 def tokenize_japanese(text: str) -> list[TokenWithMeaning]:
     """Split Japanese text into tokens with hiragana reading, dictionary form (lemma),
     part of speech, conjugation form and JMdict meanings of content words."""
+    with track("tokenizer"):
+        tokenized = tokenize(text)
     tokens = []
-    for t in tokenize(text):
-        meanings = []
-        if t.pos in LOOKUP_POS and (entries := lookup(t.lemma, t.lemma_reading, max_entries=1)):
-            meanings = ["; ".join(s.meanings) for s in entries[0].senses]
-        tokens.append(TokenWithMeaning(**t.model_dump(), dictionary_meanings=meanings))
+    with track("jmdict"):
+        for t in tokenized:
+            meanings = []
+            if t.pos in LOOKUP_POS and (entries := lookup(t.lemma, t.lemma_reading, max_entries=1)):
+                meanings = ["; ".join(s.meanings) for s in entries[0].senses]
+            tokens.append(TokenWithMeaning(**t.model_dump(), dictionary_meanings=meanings))
     return tokens
