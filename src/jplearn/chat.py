@@ -2,9 +2,10 @@
 
 import asyncio
 
+from pydantic_ai import DeferredToolRequests
 from pydantic_ai.messages import ModelMessage
 
-from jplearn.agents.orchestrator import orchestrator, tools_used
+from jplearn.agents.orchestrator import describe_approval, orchestrator, tools_used
 
 
 async def main() -> None:
@@ -21,6 +22,16 @@ async def main() -> None:
             continue
 
         result = await orchestrator.run(user_input, message_history=history)
+        # Tools marked requires_approval pause the run until the user decides
+        while isinstance(result.output, DeferredToolRequests):
+            approvals = {}
+            for call in result.output.approvals:
+                print(f"\n[approval needed]\n{describe_approval(call)}")
+                approvals[call.tool_call_id] = input("approve? [y/N] ").strip().lower() == "y"
+            result = await orchestrator.run(
+                message_history=result.all_messages(),
+                deferred_tool_results=result.output.build_results(approvals=approvals),
+            )
         history = result.all_messages()
 
         if result.output.plan:

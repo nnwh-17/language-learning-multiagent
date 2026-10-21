@@ -48,6 +48,6 @@ def anki_toolset(read_only: bool = False) -> MCPToolset:
     return MCPToolset(transport, id="anki", init_timeout=120)
 
 
-def flashcard_toolset(read_only: bool = False):
+def flashcard_toolset(read_only: bool = False, tools: set[str] = FLASHCARD_TOOLS):
     """Anki toolset limited to deck/note tools."""
-    return anki_toolset(read_only).filtered(lambda ctx, tool_def: tool_def.name in FLASHCARD_TOOLS)
+    return anki_toolset(read_only).filtered(lambda ctx, tool_def: tool_def.name in tools)

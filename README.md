@@ -31,6 +31,8 @@ python scripts/healthcheck.py --live   # also makes one real LLM call
 python scripts/test_analyzer.py        # tokenizer, analyzer agent, orchestrator -> analyzer
 python scripts/test_anki_mcp.py        # Anki MCP server, read-only
 python scripts/test_anki_mcp.py --write --agent   # also add/delete a test note, and an agent using the tools
+python scripts/test_flashcards.py      # draft cards, reject the add (nothing written)
+python scripts/test_flashcards.py --write   # approve, check cards in Anki, delete them
 ```
 
 ## Run
