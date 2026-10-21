@@ -1,0 +1,18 @@
+[project]
+name = "jplearn"
+version = "0.1.0"
+description = "Multi-agent Japanese learning assistant (PydanticAI + Anki MCP)"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-ai-slim[openai,mcp]",
+    "python-dotenv",
+    "sudachipy",
+    "sudachidict_core",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
