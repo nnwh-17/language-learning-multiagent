@@ -1,3 +1,9 @@
+"""Route user requests to Japanese-learning specialist agents and tools.
+
+The chat frontends call this agent; it delegates to the analyzer, flashcard, example, and
+research agents, while write operations pause for explicit user approval.
+"""
+
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext
 from pydantic_ai.messages import ModelMessage, ToolCallPart
@@ -68,6 +74,7 @@ After adding anything to Anki, report only what the tool result confirms (which 
 how many sentences or cards were added); never claim more.
 """
 
+# The orchestrator returns either a user-facing plan/reply or deferred approval requests.
 orchestrator = Agent(
     get_model(),
     output_type=[OrchestratorReply, DeferredToolRequests],
@@ -138,6 +145,7 @@ async def add_flashcards(deck: str, cards: list[Card]) -> dict:
 
 def tools_used(messages: list[ModelMessage]) -> list[str]:
     """Names of the tools the orchestrator called, in order (excluding its final answer)."""
+    # Tool-call messages include structured final-result markers, which are not user tools.
     return [
         p.tool_name
         for m in messages
@@ -149,6 +157,7 @@ def tools_used(messages: list[ModelMessage]) -> list[str]:
 def describe_approval(call: ToolCallPart) -> str:
     """Markdown summary of a tool call waiting for the user's approval."""
     args = call.args_as_dict()
+    # Present the pending Anki write in a form the user can review before approving.
     if call.tool_name == "add_examples_to_card":
         rows = "\n".join(f"| {s['japanese']} | {s['translation']} |" for s in args["sentences"])
         return (

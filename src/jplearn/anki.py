@@ -1,6 +1,10 @@
-"""Anki MCP server (https://github.com/ankimcp/anki-mcp-server) as a PydanticAI toolset.
+"""Provide Anki MCP toolsets for the flashcard agents and orchestrator.
 
-Needs Anki desktop running with the AnkiConnect add-on (code 2055492159) and Node.js.
+The server runs over stdio and talks to AnkiConnect. ``flashcards.py`` uses a filtered,
+read-only toolset to check for existing cards; write operations use the full toolset and
+are exposed by the orchestrator behind user approval.
+
+Requires Anki desktop with the AnkiConnect add-on (code 2055492159) and Node.js.
 """
 
 import os
@@ -13,12 +17,13 @@ from pydantic_ai.mcp import MCPToolset, ProcessToolCallback
 
 load_dotenv()
 
+# Connection settings and the log destination for the MCP child process.
 ANKI_MCP_PACKAGE = "@ankimcp/anki-mcp-server@0.27.0"
 ANKI_CONNECT_URL = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
-# The server logs a lot to stderr; keep it out of the chat
+# Keep verbose server output out of the chat.
 LOG_FILE = Path(__file__).resolve().parents[2] / "anki-mcp.log"
 
-# The server exposes ~50 tools; only show agents the ones they need.
+# Restrict the Anki API surface to the deck and note operations used by this app.
 FLASHCARD_TOOLS = {
     "listDecks",
     "createDeck",
@@ -36,17 +41,20 @@ FLASHCARD_TOOLS = {
 def anki_toolset(
     read_only: bool = False, process_tool_call: ProcessToolCallback | None = None
 ) -> MCPToolset:
-    """Launch the Anki MCP server over stdio. Use it as `async with toolset:` or pass to an Agent."""
+    """Launch the Anki MCP server; use it as an async context manager or agent toolset."""
     npx = shutil.which("npx")
     if npx is None:
         raise RuntimeError("npx not found - install Node.js 22.12+")
+
+    # Pass connection settings to the child process and enable server-side read-only mode.
     env = {**os.environ, "ANKI_CONNECT_URL": ANKI_CONNECT_URL}
     if read_only:
         env["READ_ONLY"] = "true"
+
+    # npx installs the pinned server package on first use; allow time for that startup.
     transport = StdioTransport(
         command=npx, args=["-y", ANKI_MCP_PACKAGE, "--stdio"], env=env, log_file=LOG_FILE
     )
-    # First run downloads the npm package, so allow a generous start-up time
     return MCPToolset(
         transport, id="anki", init_timeout=120, process_tool_call=process_tool_call
     )
@@ -57,5 +65,6 @@ def flashcard_toolset(
     tools: set[str] = FLASHCARD_TOOLS,
     process_tool_call: ProcessToolCallback | None = None,
 ):
-    """Anki toolset limited to deck/note tools."""
+    """Build an Anki toolset exposing only the selected deck/note operations."""
+    # Filter the full server API so agents see only tools relevant to flashcards.
     return anki_toolset(read_only, process_tool_call).filtered(lambda ctx, tool_def: tool_def.name in tools)

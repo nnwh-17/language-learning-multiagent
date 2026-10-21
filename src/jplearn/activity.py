@@ -29,6 +29,7 @@ _current: ContextVar["Activity | None"] = ContextVar("activity", default=None)
 _parent: ContextVar["LogEntry | None"] = ContextVar("activity_parent", default=None)
 _ids = itertools.count()
 
+# Event kinds are shared with the web activity-log renderer.
 EntryKind = Literal["user", "agent", "llm", "tool", "resource", "info", "error"]
 
 
@@ -48,6 +49,7 @@ class LogEntry:
 def tree_order(entries: list[LogEntry]) -> list[LogEntry]:
     """Entries with each one's children directly below it (in start order), so parallel
     tool calls don't interleave."""
+    # Rebuild parent-child grouping so concurrent operations display as nested branches.
     known = {entry.id for entry in entries}
     children: dict[int | None, list[LogEntry]] = {}
     for entry in entries:
@@ -81,6 +83,7 @@ class Activity:
         self.result: Any = None
 
     def status(self) -> dict[str, Status]:
+        # Running takes precedence if a node has both completed and active parallel work.
         status: dict[str, Status] = {node_id: "done" for node_id in self._done}
         status |= {node_id: "running" for node_id, n in self._running.items() if n}
         return status
@@ -132,6 +135,7 @@ class Activity:
 def span(kind: EntryKind, text: str, node_ids: Iterable[str] = ()):
     """Log `text`, mark `node_ids` as running, and log everything inside one level deeper.
     Yields the log entry (or None when nothing is being recorded) so details can be added."""
+    # Outside Activity.watch(), instrumentation is intentionally a no-op.
     activity = _current.get()
     if activity is None:
         yield None
@@ -188,6 +192,7 @@ class Observe(AbstractCapability[Any]):
             return await handler()
 
     async def wrap_model_request(self, ctx: RunContext, *, request_context, handler):
+        # Record token use and tool requests alongside the model call in the activity tree.
         with span("llm", f"LLM call #{ctx.run_step}") as entry:
             response = await handler(request_context)
             if entry:

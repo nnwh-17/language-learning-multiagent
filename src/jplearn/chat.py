@@ -1,4 +1,8 @@
-"""Terminal chat with the orchestrator. Run: python -m jplearn.chat"""
+"""Run a terminal chat loop with the jplearn orchestrator.
+
+This frontend maintains PydanticAI message history and asks the user to approve any
+deferred Anki writes before continuing the same conversation.
+"""
 
 import asyncio
 
@@ -9,6 +13,7 @@ from jplearn.agents.orchestrator import describe_approval, orchestrator, tools_u
 
 
 async def main() -> None:
+    # Keep conversation history between turns so the tutor can use prior context.
     history: list[ModelMessage] = []
     print("Japanese tutor - type 'exit' to quit.\n")
     while True:
@@ -32,6 +37,7 @@ async def main() -> None:
                 message_history=result.all_messages(),
                 deferred_tool_results=result.output.build_results(approvals=approvals),
             )
+        # Save the complete exchange, including any tool and approval messages.
         history = result.all_messages()
 
         if result.output.plan:

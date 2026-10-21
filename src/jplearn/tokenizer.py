@@ -1,4 +1,8 @@
-"""Japanese tokenization with SudachiPy, with labels translated to English for the LLM."""
+"""Tokenize Japanese into readings, dictionary forms, and English part-of-speech labels.
+
+The analyzer and example generator use this shared SudachiPy wrapper to ground model
+outputs and validate generated sentences.
+"""
 
 import threading
 from functools import cache
@@ -49,6 +53,7 @@ class Token(BaseModel):
 
 @cache
 def _dictionary() -> Dictionary:
+    # Loading Sudachi's system dictionary is expensive, so share it process-wide.
     return Dictionary()  # slow to load, so shared
 
 
@@ -81,6 +86,7 @@ def _reading(text: str) -> str:
 def tokenize(text: str) -> list[Token]:
     """Split Japanese text into words with reading, dictionary form and part of speech."""
     tokens = []
+    # Convert Sudachi's token metadata into stable, English-labelled model input.
     for m in _tokenizer().tokenize(text, SplitMode.C):
         pos = m.part_of_speech()
         if pos[0] in SKIP_POS:

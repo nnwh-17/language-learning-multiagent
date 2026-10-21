@@ -1,3 +1,9 @@
+"""Analyze Japanese text using the tokenizer and JMdict-backed meanings.
+
+The orchestrator calls this agent for sentence breakdowns, and the flashcard and example
+agents reuse it or its lexical helpers when they need checked Japanese forms.
+"""
+
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
@@ -7,7 +13,7 @@ from jplearn.dictionary import lookup
 from jplearn.tokenizer import Token, tokenize
 from jplearn.user_context import use_user_context
 
-# Parts of speech worth a dictionary lookup (particles/auxiliaries are grammar, not vocab)
+# Look up content words for meanings; particles and auxiliaries are explained as grammar.
 LOOKUP_POS = {
     "noun", "pronoun", "verb", "i-adjective", "na-adjective", "adverb",
     "pre-noun adjectival", "conjunction", "interjection",
@@ -57,6 +63,7 @@ explain the pieces in `note`. Grammar patterns that span several tokens
 (e.g. 〜なければならない, 〜ている) go in `grammar_points`.
 """
 
+# The agent turns deterministic token data into a learner-friendly explanation.
 analyzer = Agent(
     get_model(),
     output_type=Breakdown,
@@ -73,6 +80,7 @@ def tokenize_japanese(text: str) -> list[TokenWithMeaning]:
     with track("tokenizer"):
         tokenized = tokenize(text)
     tokens = []
+    # Attach JMdict senses to useful lexical tokens before returning them to the model.
     with track("jmdict"):
         for t in tokenized:
             meanings = []

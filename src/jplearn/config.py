@@ -1,3 +1,9 @@
+"""Load model settings and create the shared LiteLLM-backed chat model.
+
+Agent modules call ``get_model()`` so all specialists use the same configured provider
+and model name.
+"""
+
 import os
 
 from dotenv import load_dotenv
@@ -7,6 +13,7 @@ from pydantic_ai.providers.litellm import LiteLLMProvider
 
 load_dotenv()
 
+# Use the configured model name, falling back to the project default.
 MODEL_NAME = os.getenv("JPLEARN_MODEL", "claude-sonnet-5-5")
 
 
@@ -24,6 +31,7 @@ class LiteLLMChatModel(OpenAIChatModel):
 
 def get_model() -> OpenAIChatModel:
     """Model served through the LiteLLM proxy configured in .env."""
+    # Keep API credentials and the proxy URL in environment configuration, not code.
     return LiteLLMChatModel(
         MODEL_NAME,
         provider=LiteLLMProvider(

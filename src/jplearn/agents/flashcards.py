@@ -1,3 +1,9 @@
+"""Draft Japanese-learning Anki cards and perform approved card updates.
+
+The orchestrator calls this agent to draft cards; it reuses the analyzer and read-only Anki
+tools to avoid duplicates, while the orchestrator's approval flow gates actual writes.
+"""
+
 import html
 import os
 from typing import Literal
@@ -11,6 +17,7 @@ from jplearn.anki import anki_toolset, flashcard_toolset
 from jplearn.config import get_model
 from jplearn.user_context import use_user_context
 
+# Keep the deck configurable while providing a usable default.
 DEFAULT_DECK = os.getenv("JPLEARN_DECK", "jplearn")
 NOTE_TYPE = "Basic"  # fields: Front, Back
 
@@ -54,6 +61,7 @@ async def track_anki_read(ctx, call_tool, name, args):
         return await call_tool(name, args)
 
 
+# Drafting has read-only access to Anki; writes are separate orchestrator tools.
 flashcard_agent = Agent(
     get_model(),
     output_type=CardDraft,
@@ -75,6 +83,7 @@ async def break_down(ctx: RunContext, text: str) -> Breakdown:
 
 def card_fields(card: Card) -> dict[str, str]:
     """Anki Basic note fields for a card."""
+    # Escape learner/model text before embedding it into Anki's HTML field.
     e = html.escape
     back = [f"<b>{e(card.reading)}</b>" if card.reading else "", e(card.meaning), ""]
     back += [e(card.example), f"<i>{e(card.example_translation)}</i>"]
@@ -97,6 +106,7 @@ async def add_examples(word: str, reading: str, meaning: str, sentences: list[Se
     """Append example sentences to the user's card(s) whose Front is `word` (any deck),
     skipping sentences already on the card. With no such card, create one in `deck`."""
     async with anki_toolset() as anki:
+        # Search all decks so examples extend existing cards instead of creating duplicates.
         found = await anki.direct_call_tool("findNotes", {"query": f'"front:{word}"'})
         note_ids = found.get("noteIds", [])
 
@@ -114,6 +124,7 @@ async def add_examples(word: str, reading: str, meaning: str, sentences: list[Se
             )
             return {"action": "created new card", "deck": deck, "sentences_added": len(sentences), "anki": result}
 
+        # Locate each existing note's deck because notesInfo itself does not include it.
         info = await anki.direct_call_tool("notesInfo", {"notes": note_ids})
         # notesInfo has no deck, so find each note's deck by searching deck by deck
         decks = (await anki.direct_call_tool("listDecks", {}))["decks"]
@@ -148,6 +159,7 @@ async def add_examples(word: str, reading: str, meaning: str, sentences: list[Se
 async def add_cards(deck: str, cards: list[Card]) -> dict:
     """Add cards to Anki via the MCP server. Anki skips duplicates of the Front field."""
     async with anki_toolset() as anki:
+        # Ensure the destination exists, then submit all cards in one MCP call.
         await anki.direct_call_tool("createDeck", {"deckName": deck})
         return await anki.direct_call_tool(
             "addNotes",

@@ -1,3 +1,9 @@
+"""Find suitable Japanese reading passages on the web.
+
+The orchestrator delegates reading-material requests here; this agent searches and fetches
+pages, then returns a short passage, summary, difficulty estimate, and source URL.
+"""
+
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.common_tools.duckduckgo import duckduckgo_search_tool
@@ -7,6 +13,7 @@ from jplearn.activity import Observe, track
 from jplearn.config import get_model
 from jplearn.user_context import use_user_context
 
+# Keep tool limits bounded so a research request does not fetch excessive results.
 _search = duckduckgo_search_tool(max_results=5).function
 _fetch = web_fetch_tool(max_content_length=8_000, timeout=20).function
 
@@ -40,6 +47,7 @@ Song lyrics are copyrighted: never return more than 4 lines of lyrics. Give the 
 so the user can read the rest there.
 """
 
+# The model chooses searches and pages, while these wrappers expose the web capabilities.
 researcher = Agent(
     get_model(),
     output_type=Material,

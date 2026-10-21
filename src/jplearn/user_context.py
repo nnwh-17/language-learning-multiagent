@@ -1,8 +1,8 @@
-"""Saved context ("skills") the user wants the agents to know: their background, goals,
-how they like answers formatted, etc.
+"""Store user context ("skills") shared with selected learning agents.
 
-Items live in data/context.json. Each enabled item is appended to the instructions of the
-agents it applies to, on every run, so edits take effect on the next message.
+Items in ``data/context.json`` describe the learner's background, goals, and preferences.
+Each agent reloads applicable enabled items when a run starts so updates take effect
+without restarting the app.
 """
 
 import json

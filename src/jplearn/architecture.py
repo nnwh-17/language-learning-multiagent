@@ -1,9 +1,12 @@
-"""Description of the multi-agent architecture, rendered as HTML for the web UI's side panel.
+"""Model and render the agent/resource graph shown in the web UI.
 
 The diagram is a tree: each node is an agent, a resource (tokenizer, dictionary, MCP server)
 or the user, and each edge is the tool one node uses to call the next. Every node has a
 status: "idle", "running", "done" (used earlier in this turn) or "waiting" (for the user's
 approval), e.g. `render_html(status={"analyzer": "running"})`. See jplearn.activity.
+
+Agent definitions mirror the tool wiring in ``agents/``; the health check compares the
+diagram against those agents so the UI stays synchronized with the implementation.
 """
 
 import html
@@ -84,6 +87,7 @@ ROOT = user
 
 
 def all_nodes(node: Node = ROOT) -> dict[str, Node]:
+    # Flatten the graph for status updates, tool checks, and renderers.
     nodes = {node.id: node}
     for _, child in node.calls:
         nodes |= all_nodes(child)
@@ -109,6 +113,7 @@ def check_against_agents() -> list[str]:
     from jplearn.agents.researcher import researcher as researcher_agent
     from jplearn.anki import FLASHCARD_TOOLS
 
+    # Compare function tools only; MCP toolsets reveal their tool names after connecting.
     problems = []
     for node, agent in [
         (orchestrator, orchestrator_agent),
@@ -221,6 +226,7 @@ def render_graph(status: dict[str, Status]) -> str:
             pos[node_id] = (x, MARGIN + layer * (BOX_H + LAYER_GAP))
     height = MARGIN * 2 + len(by_layer) * BOX_H + (len(by_layer) - 1) * LAYER_GAP
 
+    # Build labeled arrows separately from node boxes so shared destinations stay readable.
     edges, labels = [], []
     for parent in nodes.values():
         px, py = pos[parent.id]

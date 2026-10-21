@@ -1,4 +1,8 @@
-"""Web chat with the orchestrator. Run: python -m jplearn.web"""
+"""Run the Gradio chat interface for the jplearn orchestrator.
+
+This frontend manages per-tab conversation and approval state, streams activity updates,
+and provides controls for viewing the agent graph and editing saved learner context.
+"""
 
 import time
 
@@ -42,6 +46,7 @@ async def run_orchestrator(chat: list[dict], **run_kwargs):
 async def run_turn(chat: list[dict], history: list[ModelMessage], log: list[LogEntry], **run_kwargs):
     """Run the orchestrator, yielding (chat, history, pending, status, log) each time
     something starts or finishes, so the architecture panel and the log stay live."""
+    # Activity.watch streams intermediate status snapshots to keep the UI responsive.
     activity = Activity(log)
     try:
         async for status in activity.watch(run_orchestrator(chat, **run_kwargs)):
@@ -141,6 +146,7 @@ def save_context(name: str, applies_to: str, text: str):
     name, text = name.strip(), text.strip()
     if not name or not text:
         return *context_lists(user_context.load()), "⚠️ Give the item a name and some text."
+    # Persist validated learner preferences for subsequent agent runs.
     items = user_context.upsert(ContextItem(name=name, text=text, applies_to=applies_to))
     return *context_lists(items, name), f"Saved **{name}**. It applies from your next message."
 
@@ -156,6 +162,7 @@ def toggle_context(names: list[str]):
     user_context.set_enabled(set(names))
 
 
+# Assemble chat, live architecture/log panels, and saved-context controls.
 with gr.Blocks(title="jplearn") as demo:
     with gr.Sidebar(label="Architecture", open=False, position="right", width=420):
         gr.Markdown("### Multi-agent architecture")

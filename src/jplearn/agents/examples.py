@@ -1,3 +1,9 @@
+"""Generate and validate learner-level Japanese example sentences.
+
+The orchestrator invokes this agent for example requests; it uses JMdict for word senses
+and the shared Sudachi tokenizer to verify that generated sentences contain each target.
+"""
+
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry
 
@@ -43,6 +49,7 @@ For each word you are given:
 Each sentence must contain the word itself (any conjugation), not a synonym.
 """
 
+# A retry lets the model repair sentences that fail the deterministic output check.
 examples_agent = Agent(
     get_model(),
     output_type=ExampleSet,
@@ -67,6 +74,7 @@ def lookup_word(word: str, reading: str | None = None) -> list[DictEntry]:
 def uses_word(sentence: str, word: str) -> bool:
     """Whether the tokenizer finds `word` (in any conjugation) in `sentence`. A kana `word`
     also matches its kanji spelling (なる matches 鳴りました), a kanji one only itself."""
+    # Exact substring matching handles uninflected forms without tokenizing.
     if word in sentence:
         return True
     tokens = tokenize(sentence)
@@ -80,6 +88,7 @@ def uses_word(sentence: str, word: str) -> bool:
 @examples_agent.output_validator
 def check_examples(output: ExampleSet) -> ExampleSet:
     """Reject sentences that don't actually contain the target word, so the model fixes them."""
+    # Check every generated sentence against its target and ask the model to repair failures.
     with track("tokenizer"):
         problems = [
             f"'{ex.japanese}' does not use {w.word}"
