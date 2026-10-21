@@ -9,6 +9,7 @@ from jplearn.activity import Observe, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.anki import anki_toolset, flashcard_toolset
 from jplearn.config import get_model
+from jplearn.user_context import use_user_context
 
 DEFAULT_DECK = os.getenv("JPLEARN_DECK", "jplearn")
 NOTE_TYPE = "Basic"  # fields: Front, Back
@@ -62,6 +63,7 @@ flashcard_agent = Agent(
         flashcard_toolset(read_only=True, tools={"findNotes"}, process_tool_call=track_anki_read)
     ],
 )
+use_user_context(flashcard_agent, "flashcards")
 
 
 @flashcard_agent.tool

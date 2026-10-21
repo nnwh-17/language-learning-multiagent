@@ -5,6 +5,7 @@ from pydantic_ai.common_tools.web_fetch import web_fetch_tool
 
 from jplearn.activity import Observe, track
 from jplearn.config import get_model
+from jplearn.user_context import use_user_context
 
 _search = duckduckgo_search_tool(max_results=5).function
 _fetch = web_fetch_tool(max_content_length=8_000, timeout=20).function
@@ -45,6 +46,7 @@ researcher = Agent(
     instructions=INSTRUCTIONS,
     capabilities=[Observe("researcher")],
 )
+use_user_context(researcher, "researcher")
 
 
 @researcher.tool_plain

@@ -8,6 +8,7 @@ from jplearn.agents.flashcards import Card, CardDraft, add_cards, flashcard_agen
 from jplearn.agents.researcher import Material, researcher
 from jplearn.config import get_model
 from jplearn.dictionary import DictEntry, lookup
+from jplearn.user_context import use_user_context
 
 
 class OrchestratorReply(BaseModel):
@@ -54,6 +55,7 @@ orchestrator = Agent(
     instructions=INSTRUCTIONS,
     capabilities=[Observe("orchestrator")],
 )
+use_user_context(orchestrator, "orchestrator")
 
 
 @orchestrator.tool

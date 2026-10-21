@@ -5,6 +5,7 @@ from jplearn.activity import Observe, track
 from jplearn.config import get_model
 from jplearn.dictionary import lookup
 from jplearn.tokenizer import Token, tokenize
+from jplearn.user_context import use_user_context
 
 # Parts of speech worth a dictionary lookup (particles/auxiliaries are grammar, not vocab)
 LOOKUP_POS = {
@@ -62,6 +63,7 @@ analyzer = Agent(
     instructions=INSTRUCTIONS,
     capabilities=[Observe("analyzer")],
 )
+use_user_context(analyzer, "analyzer")
 
 
 @analyzer.tool_plain

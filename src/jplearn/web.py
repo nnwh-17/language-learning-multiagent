@@ -6,11 +6,14 @@ import gradio as gr
 from pydantic_ai import DeferredToolRequests, ToolDenied
 from pydantic_ai.messages import ModelMessage
 
+from jplearn import user_context
 from jplearn.activity import Activity, LogEntry
 from jplearn.agents.orchestrator import describe_approval, orchestrator, tools_used
 from jplearn.architecture import Status, approval_targets, render_html
 from jplearn.log_view import render_log
+from jplearn.user_context import AGENTS, ContextItem
 
+NEW_ITEM = "➕ New item"
 
 async def run_orchestrator(chat: list[dict], **run_kwargs):
     """Run the orchestrator and append its output to the chat.
@@ -117,6 +120,42 @@ async def reject(chat, history, pending, status, log, graph):
         yield update
 
 
+def context_lists(items: list[ContextItem], selected: str = NEW_ITEM):
+    """Updates for [active checkboxes, edit dropdown] after the saved items changed."""
+    names = [i.name for i in items]
+    return (
+        gr.CheckboxGroup(choices=names, value=[i.name for i in items if i.enabled]),
+        gr.Dropdown(choices=[NEW_ITEM, *names], value=selected if selected in names else NEW_ITEM),
+    )
+
+
+def pick_context(name: str):
+    """Fill the editor with the chosen item (or blank it for a new one)."""
+    item = next((i for i in user_context.load() if i.name == name), None)
+    if item is None:
+        return "", "all", ""
+    return item.name, item.applies_to, item.text
+
+
+def save_context(name: str, applies_to: str, text: str):
+    name, text = name.strip(), text.strip()
+    if not name or not text:
+        return *context_lists(user_context.load()), "⚠️ Give the item a name and some text."
+    items = user_context.upsert(ContextItem(name=name, text=text, applies_to=applies_to))
+    return *context_lists(items, name), f"Saved **{name}**. It applies from your next message."
+
+
+def delete_context(name: str):
+    if name == NEW_ITEM:
+        return *context_lists(user_context.load()), "", "all", "", "Pick an item to delete."
+    items = user_context.delete(name)
+    return *context_lists(items), "", "all", "", f"Deleted **{name}**."
+
+
+def toggle_context(names: list[str]):
+    user_context.set_enabled(set(names))
+
+
 with gr.Blocks(title="jplearn") as demo:
     with gr.Sidebar(label="Architecture", open=False, position="right", width=420):
         gr.Markdown("### Multi-agent architecture")
@@ -124,6 +163,32 @@ with gr.Blocks(title="jplearn") as demo:
         architecture = gr.HTML(render_html())
 
     gr.Markdown("# 日本語 tutor")
+    with gr.Accordion("Your context & preferences", open=False):
+        gr.Markdown(
+            "Saved notes the agents read on every message: your background, goals, how you "
+            "like answers formatted, ... Untick an item to switch it off without deleting it."
+        )
+        ctx_active = gr.CheckboxGroup(label="Active items", choices=[])
+        ctx_pick = gr.Dropdown(label="Edit item", choices=[NEW_ITEM], value=NEW_ITEM)
+        with gr.Row():
+            ctx_name = gr.Textbox(label="Name", placeholder="e.g. My background", scale=2)
+            ctx_scope = gr.Dropdown(
+                label="Applies to", choices=[(label, key) for key, label in AGENTS.items()], value="all", scale=1
+            )
+        ctx_text = gr.Textbox(
+            label="Context",
+            lines=4,
+            placeholder=(
+                "e.g. I'm an English speaker around JLPT N4. I can read hiragana/katakana and "
+                "~300 kanji. Always add romaji after example sentences. Keep answers short and "
+                "use tables for vocabulary."
+            ),
+        )
+        with gr.Row():
+            ctx_save = gr.Button("Save", variant="primary")
+            ctx_delete = gr.Button("Delete", variant="stop")
+        ctx_status = gr.Markdown()
+
     chatbot = gr.Chatbot(height=600)
     history = gr.State([])  # PydanticAI message history, one per browser tab
     pending = gr.State(None)  # DeferredToolRequests waiting for approval
@@ -144,6 +209,15 @@ with gr.Blocks(title="jplearn") as demo:
     reject_btn.click(reject, [*state, graph_view], out)
     clear.click(lambda graph: outputs([], [], None, {}, [], graph), graph_view, out)
     graph_view.change(architecture_html, [status, graph_view], architecture)
+
+    # The file can change outside this tab, so reload the items whenever the page opens
+    demo.load(lambda: context_lists(user_context.load()), None, [ctx_active, ctx_pick])
+    ctx_pick.change(pick_context, ctx_pick, [ctx_name, ctx_scope, ctx_text])
+    ctx_save.click(save_context, [ctx_name, ctx_scope, ctx_text], [ctx_active, ctx_pick, ctx_status])
+    ctx_delete.click(
+        delete_context, ctx_pick, [ctx_active, ctx_pick, ctx_name, ctx_scope, ctx_text, ctx_status]
+    )
+    ctx_active.input(toggle_context, ctx_active, None)
 
 if __name__ == "__main__":
     demo.launch()
