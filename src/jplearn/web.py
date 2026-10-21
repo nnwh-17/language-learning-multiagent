@@ -118,7 +118,7 @@ async def reject(chat, history, pending, status, log, graph):
 
 
 with gr.Blocks(title="jplearn") as demo:
-    with gr.Sidebar(label="Architecture", open=False, position="right", width=360):
+    with gr.Sidebar(label="Architecture", open=False, position="right", width=420):
         gr.Markdown("### Multi-agent architecture")
         graph_view = gr.Checkbox(label="Graph view", value=False)
         architecture = gr.HTML(render_html())

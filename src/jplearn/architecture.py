@@ -29,6 +29,8 @@ tokenizer = Node("tokenizer", "Sudachi tokenizer", "resource", "readings, dictio
 jmdict = Node("jmdict", "JMdict", "resource", "local SQLite dictionary")
 anki_read = Node("anki_read", "Anki MCP (read-only)", "resource", "checks existing cards")
 anki_write = Node("anki_write", "Anki MCP", "resource", "adds notes via AnkiConnect")
+web_search = Node("web_search", "DuckDuckGo", "resource", "web search")
+web_fetch = Node("web_fetch", "Web pages", "resource", "fetches pages as markdown")
 
 analyzer = Node(
     "analyzer",
@@ -44,6 +46,13 @@ flashcards = Node(
     "drafts vocab & grammar cards",
     calls=[("break_down", analyzer), ("findNotes", anki_read)],
 )
+researcher = Node(
+    "researcher",
+    "Researcher",
+    "agent",
+    "finds Japanese reading material online",
+    calls=[("search_web", web_search), ("fetch_page", web_fetch)],
+)
 orchestrator = Node(
     "orchestrator",
     "Orchestrator",
@@ -54,6 +63,7 @@ orchestrator = Node(
         ("lookup_word", jmdict),
         ("draft_flashcards", flashcards),
         ("add_flashcards", anki_write),
+        ("find_material", researcher),
     ],
     approval={"add_flashcards"},
 )
@@ -84,6 +94,7 @@ def check_against_agents() -> list[str]:
     from jplearn.agents.analyzer import analyzer as analyzer_agent
     from jplearn.agents.flashcards import flashcard_agent
     from jplearn.agents.orchestrator import orchestrator as orchestrator_agent
+    from jplearn.agents.researcher import researcher as researcher_agent
     from jplearn.anki import FLASHCARD_TOOLS
 
     problems = []
@@ -91,6 +102,7 @@ def check_against_agents() -> list[str]:
         (orchestrator, orchestrator_agent),
         (analyzer, analyzer_agent),
         (flashcards, flashcard_agent),
+        (researcher, researcher_agent),
     ]:
         # MCP toolsets only know their tools once connected, so compare function tools only
         actual = {name for ts in agent.toolsets for name in getattr(ts, "tools", {})}
@@ -156,7 +168,7 @@ GRAPH_CSS = """
 .arch .g-arrow { fill: var(--body-text-color-subdued); }
 """
 
-BOX_W, BOX_H, LAYER_GAP, WIDTH = 136, 40, 52, 340
+BOX_W, BOX_H, LAYER_GAP, MIN_WIDTH, BOX_GAP = 128, 40, 52, 340, 10
 MARGIN = 26  # room at the sides for the lanes of arrows that skip a layer
 LANE = 10
 
@@ -185,9 +197,12 @@ def render_graph(status: dict[str, Status]) -> str:
     for node_id in nodes:  # insertion order = order of discovery, keeps siblings together
         by_layer.setdefault(depth[node_id], []).append(node_id)
 
+    # Wide enough for the fullest layer; the SVG scales down to fit the panel
+    widest = max(len(ids) for ids in by_layer.values())
+    width = max(MIN_WIDTH, widest * (BOX_W + BOX_GAP) + 2 * MARGIN)
     pos: dict[str, tuple[float, float]] = {}  # top-left corner of each box
     for layer, ids in by_layer.items():
-        slot = (WIDTH - 2 * MARGIN) / len(ids)
+        slot = (width - 2 * MARGIN) / len(ids)
         for i, node_id in enumerate(ids):
             x = MARGIN + slot * (i + 0.5) - BOX_W / 2
             pos[node_id] = (x, MARGIN + layer * (BOX_H + LAYER_GAP))
@@ -210,8 +225,8 @@ def render_graph(status: dict[str, Status]) -> str:
                 label = f"<text class='g-label' x='{x1 + (x2 - x1) * 0.75}' y='{y2 - 10}' text-anchor='middle'>{text}</text>"
             else:
                 # Skips a layer: leave the parent's side, run down a lane at the edge, enter the child's side
-                left = cx + BOX_W / 2 < WIDTH / 2
-                lane = LANE if left else WIDTH - LANE
+                left = cx + BOX_W / 2 < width / 2
+                lane = LANE if left else width - LANE
                 x1, y1 = (px if left else px + BOX_W), py + BOX_H / 2
                 x2, y2 = (cx if left else cx + BOX_W), cy + BOX_H / 2
                 path = f"M{x1},{y1} C{lane},{y1} {lane},{y1} {lane},{y1 + 20} L{lane},{y2 - 20} C{lane},{y2} {lane},{y2} {x2},{y2}"
@@ -240,7 +255,7 @@ def render_graph(status: dict[str, Status]) -> str:
         )
 
     return (
-        f"<svg viewBox='0 0 {WIDTH} {height}' role='img' aria-label='Agent architecture graph'>"
+        f"<svg viewBox='0 0 {width} {height}' role='img' aria-label='Agent architecture graph'>"
         "<defs><marker id='arrow' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='7' markerHeight='7' "
         "orient='auto-start-reverse'><path class='g-arrow' d='M0,0 L10,5 L0,10 z'/></marker></defs>"
         + "".join(edges) + "".join(boxes) + "".join(labels) + "</svg>"

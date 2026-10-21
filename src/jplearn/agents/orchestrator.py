@@ -5,6 +5,7 @@ from pydantic_ai.messages import ModelMessage, ToolCallPart
 from jplearn.activity import Observe, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.agents.flashcards import Card, CardDraft, add_cards, flashcard_agent
+from jplearn.agents.researcher import Material, researcher
 from jplearn.config import get_model
 from jplearn.dictionary import DictEntry, lookup
 
@@ -37,6 +38,10 @@ Specialists (tools):
 - `add_flashcards`: adds cards to Anki. The user is asked to approve before it runs, so
   call it straight after drafting (with the drafted cards unchanged) unless the user asked
   for changes; then apply their changes and call it again. If it is denied, do not retry.
+- `find_material`: searches the web for Japanese reading material (articles, news, song
+  pages, ...) and returns a passage plus its URL. Use it when the user asks you to find
+  something to read. Always give the user the URL. If they then want a breakdown or
+  flashcards, pass the returned passage to `analyze_japanese` / `draft_flashcards`.
 
 For anything no specialist covers yet, answer directly.
 When you write Japanese, add furigana for kanji the first time it appears, e.g. 食(た)べる.
@@ -72,6 +77,14 @@ async def draft_flashcards(ctx: RunContext, request: str) -> CardDraft:
     """Draft Anki flashcards. `request` is the Japanese text (or words) to make cards from,
     plus any wishes from the user such as deck name or 'grammar only'."""
     result = await flashcard_agent.run(request, usage=ctx.usage)
+    return result.output
+
+
+@orchestrator.tool
+async def find_material(ctx: RunContext, request: str) -> Material:
+    """Find Japanese reading material on the web. `request` describes what the user wants,
+    e.g. 'easy news article about cooking' or 'lyrics of 夜に駆ける by YOASOBI'."""
+    result = await researcher.run(request, usage=ctx.usage)
     return result.output
 
 
