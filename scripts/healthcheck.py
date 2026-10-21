@@ -60,6 +60,15 @@ def _():
     return " ".join(w[0] for w in words)
 
 
+@check("JMdict dictionary")
+def _():
+    from jplearn.dictionary import lookup
+
+    entries = lookup("食べる")
+    assert entries and "to eat" in entries[0].senses[0].meanings, entries
+    return "食べる -> to eat"
+
+
 if "--live" in sys.argv:
 
     @check("LLM round trip")

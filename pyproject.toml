@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic-ai-slim[openai,mcp]",
     "python-dotenv",
+    "gradio",
     "sudachipy",
     "sudachidict_core",
 ]

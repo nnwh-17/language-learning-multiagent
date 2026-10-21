@@ -4,7 +4,7 @@ import asyncio
 
 from pydantic_ai.messages import ModelMessage
 
-from jplearn.agents.orchestrator import orchestrator
+from jplearn.agents.orchestrator import orchestrator, tools_used
 
 
 async def main() -> None:
@@ -27,6 +27,8 @@ async def main() -> None:
             print("\n[plan]")
             for i, step in enumerate(result.output.plan, 1):
                 print(f"  {i}. {step}")
+        if tools := tools_used(result.new_messages()):
+            print(f"[tools] {', '.join(tools)}")
         print(f"\ntutor> {result.output.reply}\n")
 
 
