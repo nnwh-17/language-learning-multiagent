@@ -83,6 +83,68 @@ def card_fields(card: Card) -> dict[str, str]:
     return {"Front": e(card.front), "Back": "<br>".join(back).removeprefix("<br>")}
 
 
+class Sentence(BaseModel):
+    japanese: str
+    translation: str
+
+
+def sentences_html(sentences: list[Sentence]) -> str:
+    e = html.escape
+    return "<br><br>".join(f"{e(s.japanese)}<br><i>{e(s.translation)}</i>" for s in sentences)
+
+
+async def add_examples(word: str, reading: str, meaning: str, sentences: list[Sentence], deck: str) -> dict:
+    """Append example sentences to the user's card(s) whose Front is `word` (any deck),
+    skipping sentences already on the card. With no such card, create one in `deck`."""
+    async with anki_toolset() as anki:
+        found = await anki.direct_call_tool("findNotes", {"query": f'"front:{word}"'})
+        note_ids = found.get("noteIds", [])
+
+        if not note_ids:
+            await anki.direct_call_tool("createDeck", {"deckName": deck})
+            back = f"<b>{html.escape(reading)}</b><br>{html.escape(meaning)}<br><br>" + sentences_html(sentences)
+            result = await anki.direct_call_tool(
+                "addNote",
+                {
+                    "deckName": deck,
+                    "modelName": NOTE_TYPE,
+                    "fields": {"Front": html.escape(word), "Back": back},
+                    "tags": ["jplearn", "vocab"],
+                },
+            )
+            return {"action": "created new card", "deck": deck, "sentences_added": len(sentences), "anki": result}
+
+        info = await anki.direct_call_tool("notesInfo", {"notes": note_ids})
+        # notesInfo has no deck, so find each note's deck by searching deck by deck
+        decks = (await anki.direct_call_tool("listDecks", {}))["decks"]
+        deck_of = {}
+        for d in decks:
+            hits = await anki.direct_call_tool("findNotes", {"query": f'"front:{word}" "deck:{d["name"]}" -"deck:{d["name"]}::*"'})
+            deck_of |= {note_id: d["name"] for note_id in hits.get("noteIds", [])}
+        updated = []
+        for note in info["notes"]:
+            fields = note["fields"]
+            if "Back" not in fields:
+                updated.append({"note_id": note["noteId"], "skipped": f"note type {note['modelName']} has no Back field"})
+                continue
+            back = fields["Back"]["value"]
+            new = [s for s in sentences if s.japanese not in back and html.escape(s.japanese) not in back]
+            if new:
+                await anki.direct_call_tool(
+                    "updateNoteFields",
+                    {"note": {"id": note["noteId"], "fields": {"Back": back + "<br><br>" + sentences_html(new)}}},
+                )
+            updated.append(
+                {
+                    "note_id": note["noteId"],
+                    "deck": deck_of.get(note["noteId"], "unknown"),
+                    "sentences_added": len(new),
+                    "already_on_card": len(sentences) - len(new),
+                }
+            )
+        return {"action": "updated existing card(s)", "notes": updated}
+
+
 async def add_cards(deck: str, cards: list[Card]) -> dict:
     """Add cards to Anki via the MCP server. Anki skips duplicates of the Front field."""
     async with anki_toolset() as anki:

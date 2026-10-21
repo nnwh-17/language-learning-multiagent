@@ -21,6 +21,7 @@ AGENTS = {
     "analyzer": "Analyzer",
     "flashcards": "Flashcard agent",
     "researcher": "Researcher",
+    "examples": "Example sentences",
 }
 
 

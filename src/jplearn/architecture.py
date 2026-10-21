@@ -23,6 +23,7 @@ class Node:
     # (tool name used to reach the child, child node)
     calls: list[tuple[str, "Node"]] = field(default_factory=list)
     approval: set[str] = field(default_factory=set)  # tools that need the user's approval
+    checks: set[str] = field(default_factory=set)  # edges that aren't tools, e.g. output checks
 
 
 tokenizer = Node("tokenizer", "Sudachi tokenizer", "resource", "readings, dictionary forms, POS")
@@ -53,6 +54,14 @@ researcher = Node(
     "finds Japanese reading material online",
     calls=[("search_web", web_search), ("fetch_page", web_fetch)],
 )
+examples = Node(
+    "examples",
+    "Example sentences",
+    "agent",
+    "writes example sentences for words",
+    calls=[("lookup_word", jmdict), ("output check", tokenizer)],
+    checks={"output check"},
+)
 orchestrator = Node(
     "orchestrator",
     "Orchestrator",
@@ -63,9 +72,11 @@ orchestrator = Node(
         ("lookup_word", jmdict),
         ("draft_flashcards", flashcards),
         ("add_flashcards", anki_write),
+        ("add_examples_to_card", anki_write),
         ("find_material", researcher),
+        ("generate_examples", examples),
     ],
-    approval={"add_flashcards"},
+    approval={"add_flashcards", "add_examples_to_card"},
 )
 user = Node("user", "You", "user", "chat", calls=[("message", orchestrator)])
 
@@ -92,6 +103,7 @@ def approval_targets(tool_name: str) -> set[str]:
 def check_against_agents() -> list[str]:
     """Differences between this diagram and the tools the agents actually have."""
     from jplearn.agents.analyzer import analyzer as analyzer_agent
+    from jplearn.agents.examples import examples_agent
     from jplearn.agents.flashcards import flashcard_agent
     from jplearn.agents.orchestrator import orchestrator as orchestrator_agent
     from jplearn.agents.researcher import researcher as researcher_agent
@@ -103,10 +115,11 @@ def check_against_agents() -> list[str]:
         (analyzer, analyzer_agent),
         (flashcards, flashcard_agent),
         (researcher, researcher_agent),
+        (examples, examples_agent),
     ]:
         # MCP toolsets only know their tools once connected, so compare function tools only
         actual = {name for ts in agent.toolsets for name in getattr(ts, "tools", {})}
-        drawn = {tool for tool, _ in node.calls if tool not in FLASHCARD_TOOLS}
+        drawn = {tool for tool, _ in node.calls if tool not in FLASHCARD_TOOLS | node.checks}
         if actual != drawn:
             problems.append(f"{node.label}: diagram {sorted(drawn)} vs code {sorted(actual)}")
     return problems
@@ -211,18 +224,26 @@ def render_graph(status: dict[str, Status]) -> str:
     edges, labels = [], []
     for parent in nodes.values():
         px, py = pos[parent.id]
-        labelled = set()  # one tool can reach several resources; label it once
+        # Several tools can lead to the same child: draw one arrow with a label per tool
+        by_child: dict[str, list[str]] = {}
         for tool, child in parent.calls:
-            cx, cy = pos[child.id]
-            approval = tool in parent.approval
-            text = f"{e(tool)}{' 🔒' if approval else ''}"
+            by_child.setdefault(child.id, []).append(tool)
+        labelled = set()  # one tool can reach several resources; label it once
+        for child_id, tools in by_child.items():
+            cx, cy = pos[child_id]
+            approval = any(t in parent.approval for t in tools)
+            texts = [f"{e(t)}{' 🔒' if t in parent.approval else ''}" for t in tools]
             if depth[child.id] - depth[parent.id] == 1:
                 # Neighbouring layers: from the bottom of the parent into the top of the child
                 x1, y1 = px + BOX_W / 2, py + BOX_H
                 x2, y2 = cx + BOX_W / 2, cy
                 path = f"M{x1},{y1} C{x1},{y1 + 25} {x2},{y2 - 25} {x2},{y2}"
-                # Label near the child so labels of sibling arrows don't collide
-                label = f"<text class='g-label' x='{x1 + (x2 - x1) * 0.75}' y='{y2 - 10}' text-anchor='middle'>{text}</text>"
+                # Label near the child so labels of sibling arrows don't collide; stack upwards
+                label = "".join(
+                    f"<text class='g-label' x='{x1 + (x2 - x1) * 0.75}' y='{y2 - 10 - 11 * (len(texts) - 1 - i)}' "
+                    f"text-anchor='middle'>{text}</text>"
+                    for i, text in enumerate(texts)
+                )
             else:
                 # Skips a layer: leave the parent's side, run down a lane at the edge, enter the child's side
                 left = cx + BOX_W / 2 < width / 2
@@ -233,13 +254,13 @@ def render_graph(status: dict[str, Status]) -> str:
                 mid = (y1 + y2) / 2
                 label = (
                     f"<text class='g-label' x='{lane}' y='{mid}' text-anchor='middle' dominant-baseline='central' "
-                    f"transform='rotate(-90 {lane} {mid})'>{text}</text>"
+                    f"transform='rotate(-90 {lane} {mid})'>{' / '.join(texts)}</text>"
                 )
             edges.append(
                 f"<path class='g-edge{' approval' if approval else ''}' d='{path}' marker-end='url(#arrow)'/>"
             )
-            if tool not in labelled:
-                labelled.add(tool)
+            if tuple(tools) not in labelled:
+                labelled.add(tuple(tools))
                 labels.append(label)
 
     boxes = []

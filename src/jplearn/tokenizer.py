@@ -1,5 +1,6 @@
 """Japanese tokenization with SudachiPy, with labels translated to English for the LLM."""
 
+import threading
 from functools import cache
 
 from pydantic import BaseModel
@@ -47,8 +48,19 @@ class Token(BaseModel):
 
 
 @cache
+def _dictionary() -> Dictionary:
+    return Dictionary()  # slow to load, so shared
+
+
+_local = threading.local()
+
+
 def _tokenizer():
-    return Dictionary().tokenizer()
+    """A Sudachi tokenizer can't be used by two threads at once, and PydanticAI runs sync
+    tools in worker threads (sometimes in parallel), so each thread gets its own."""
+    if not hasattr(_local, "tokenizer"):
+        _local.tokenizer = _dictionary().tokenizer()
+    return _local.tokenizer
 
 
 def to_hiragana(katakana: str) -> str:
