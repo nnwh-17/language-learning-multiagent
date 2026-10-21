@@ -1,6 +1,6 @@
 # language-learning-multiagent
  
-A multi-agent Japanese learning tool built with PydanticAI. Paste in Japanese text and it extracts vocab and grammar, generates new example sentences, and builds Anki flashcards.
+A multi-agent Japanese learning tool built with PydanticAI. Paste in Japanese text and it extracts vocab and grammar, generates new example sentences.
  
 ## Prerequisites
  
