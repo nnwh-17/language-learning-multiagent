@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
-from jplearn.activity import track
+from jplearn.activity import Observe, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.anki import anki_toolset, flashcard_toolset
 from jplearn.config import get_model
@@ -57,6 +57,7 @@ flashcard_agent = Agent(
     get_model(),
     output_type=CardDraft,
     instructions=INSTRUCTIONS,
+    capabilities=[Observe("flashcards")],
     toolsets=[
         flashcard_toolset(read_only=True, tools={"findNotes"}, process_tool_call=track_anki_read)
     ],
@@ -66,8 +67,7 @@ flashcard_agent = Agent(
 @flashcard_agent.tool
 async def break_down(ctx: RunContext, text: str) -> Breakdown:
     """Break Japanese text into words (with JMdict meanings) and grammar points."""
-    with track("analyzer"):
-        result = await analyzer.run(text, usage=ctx.usage)
+    result = await analyzer.run(text, usage=ctx.usage)
     return result.output
 
 

@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 
-from jplearn.activity import track
+from jplearn.activity import Observe, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.agents.flashcards import Card, CardDraft, add_cards, flashcard_agent
 from jplearn.config import get_model
@@ -47,6 +47,7 @@ orchestrator = Agent(
     get_model(),
     output_type=[OrchestratorReply, DeferredToolRequests],
     instructions=INSTRUCTIONS,
+    capabilities=[Observe("orchestrator")],
 )
 
 
@@ -54,8 +55,7 @@ orchestrator = Agent(
 async def analyze_japanese(ctx: RunContext, text: str) -> Breakdown:
     """Break down Japanese text: translation, each word's reading, dictionary form and
     meaning, and the grammar points used. Pass the Japanese text only."""
-    with track("analyzer"):
-        result = await analyzer.run(text, usage=ctx.usage)
+    result = await analyzer.run(text, usage=ctx.usage)
     return result.output
 
 
@@ -71,8 +71,7 @@ def lookup_word(word: str, reading: str | None = None) -> list[DictEntry]:
 async def draft_flashcards(ctx: RunContext, request: str) -> CardDraft:
     """Draft Anki flashcards. `request` is the Japanese text (or words) to make cards from,
     plus any wishes from the user such as deck name or 'grammar only'."""
-    with track("flashcards"):
-        result = await flashcard_agent.run(request, usage=ctx.usage)
+    result = await flashcard_agent.run(request, usage=ctx.usage)
     return result.output
 
 

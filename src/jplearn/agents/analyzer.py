@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
-from jplearn.activity import track
+from jplearn.activity import Observe, track
 from jplearn.config import get_model
 from jplearn.dictionary import lookup
 from jplearn.tokenizer import Token, tokenize
@@ -60,6 +60,7 @@ analyzer = Agent(
     get_model(),
     output_type=Breakdown,
     instructions=INSTRUCTIONS,
+    capabilities=[Observe("analyzer")],
 )
 
 
