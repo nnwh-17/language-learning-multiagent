@@ -162,60 +162,186 @@ def toggle_context(names: list[str]):
     user_context.set_enabled(set(names))
 
 
-# Assemble chat, live architecture/log panels, and saved-context controls.
-with gr.Blocks(title="jplearn") as demo:
-    with gr.Sidebar(label="Architecture", open=False, position="right", width=420):
-        gr.Markdown("### Multi-agent architecture")
+# Warm neutrals and a terracotta accent, in the style of Claude's interface
+THEME = gr.themes.Base(
+    primary_hue="orange",
+    neutral_hue="stone",
+    radius_size="lg",
+    font=["ui-sans-serif", "-apple-system", "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", "sans-serif"],
+    font_mono=["ui-monospace", "Cascadia Code", "Consolas", "monospace"],
+).set(
+    body_background_fill="#faf9f5",
+    body_background_fill_dark="#262624",
+    background_fill_primary="#faf9f5",
+    background_fill_primary_dark="#262624",
+    background_fill_secondary="#f5f4ed",
+    background_fill_secondary_dark="#1f1e1d",
+    block_background_fill="#ffffff",
+    block_background_fill_dark="#30302e",
+    block_border_color="#e8e6dc",
+    block_border_color_dark="#3e3e38",
+    border_color_primary="#e8e6dc",
+    border_color_primary_dark="#3e3e38",
+    block_shadow="none",
+    block_shadow_dark="none",
+    body_text_color="#141413",
+    body_text_color_dark="#f5f4ef",
+    body_text_color_subdued="#73726c",
+    body_text_color_subdued_dark="#a6a39a",
+    color_accent="#c96442",
+    color_accent_soft="#f5e6de",
+    color_accent_soft_dark="#4a3128",
+    input_background_fill="#ffffff",
+    input_background_fill_dark="#30302e",
+    button_primary_background_fill="#c96442",
+    button_primary_background_fill_dark="#c96442",
+    button_primary_background_fill_hover="#b5583a",
+    button_primary_background_fill_hover_dark="#d97757",
+    button_primary_text_color="#ffffff",
+    button_primary_text_color_dark="#ffffff",
+    button_secondary_background_fill="transparent",
+    button_secondary_background_fill_dark="transparent",
+    button_secondary_background_fill_hover="#f0eee6",
+    button_secondary_background_fill_hover_dark="#3a3a37",
+)
+
+SERIF = 'ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif'
+CSS = f"""
+footer {{ display: none !important; }}
+.gradio-container {{ max-width: 100% !important; }}
+
+/* Centred conversation column, like claude.ai */
+#main {{ max-width: 800px; width: 100%; margin: 0 auto; }}
+#chat, #chat .bubble-wrap {{ border: none !important; background: transparent !important; }}
+#chat .message {{ font-size: 16px; line-height: 1.65; }}
+#chat .bot-row .message, #chat .message.bot {{
+  background: transparent !important; border: none !important; box-shadow: none !important;
+  font-family: {SERIF}; }}
+#chat .user-row .message, #chat .message.user {{
+  background: #f0eee6 !important; border: none !important; border-radius: 16px !important;
+  padding: 10px 16px !important; }}
+.dark #chat .user-row .message, .dark #chat .message.user {{ background: #141413 !important; }}
+#chat .bubble.bot-row {{ max-width: 100%; }}
+#chat .placeholder-content h2 {{ font-family: {SERIF}; font-weight: 400; font-size: 32px; }}
+
+/* Rounded composer with the send button inside it */
+#composer {{ border: 1px solid var(--border-color-primary) !important; border-radius: 20px !important;
+  background: var(--input-background-fill) !important; padding: 10px 12px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }}
+#composer textarea {{ font-size: 16px; background: transparent !important; border: none !important;
+  box-shadow: none !important; }}
+#composer button {{ background: #c96442 !important; color: white !important; border-radius: 10px !important; }}
+#composer button:hover {{ background: #b5583a !important; }}
+#chat .examples {{ grid-template-columns: repeat(2, 1fr) !important; max-width: 640px; margin: 0 auto; }}
+.hint, .hint * {{ text-align: center; font-size: 12px !important; color: var(--body-text-color-subdued) !important; }}
+
+#approval {{ gap: 8px; justify-content: center; }}
+#approval button {{ max-width: 160px; border-radius: 10px; }}
+#approval button.secondary {{ border: 1px solid var(--border-color-primary); }}
+
+/* Sidebars */
+.sidebar {{ background: var(--background-fill-secondary) !important; }}
+.brand h2 {{ font-family: {SERIF}; font-weight: 500; margin: 4px 0 12px; }}
+#new-chat {{ justify-content: flex-start; font-weight: 500; border: none; box-shadow: none; }}
+.side-section {{ border: none !important; background: transparent !important; }}
+"""
+
+PLACEHOLDER = """## How can I help you study today?
+
+Ask about grammar or vocabulary, paste Japanese text to break down, or make Anki cards."""
+
+EXAMPLES = [
+    {"text": "Break down: 昨日、友達と一緒に新しいレストランに行きました。"},
+    {"text": "What's the difference between は and が?"},
+    {"text": "Give me example sentences using 〜てしまう"},
+    {"text": "Make Anki flashcards for 勉強, 練習 and 復習"},
+]
+
+
+def pick_example(evt: gr.SelectData) -> str:
+    return evt.value["text"]
+
+
+# Left: new chat and saved preferences. Centre: the conversation. Right: what the agents are doing.
+with gr.Blocks(title="jplearn", fill_height=True) as demo:
+    with gr.Sidebar(label="Menu", open=True, position="left", width=300) as menu:
+        gr.Markdown("## 日本語 tutor", elem_classes="brand")
+        clear = gr.Button("＋  New chat", elem_id="new-chat", variant="secondary")
+        with gr.Accordion("Preferences", open=False, elem_classes="side-section"):
+            gr.Markdown(
+                "Notes the agents read on every message: your background, goals, how you like "
+                "answers formatted. Untick an item to switch it off without deleting it."
+            )
+            ctx_active = gr.CheckboxGroup(label="Active items", choices=[])
+            ctx_pick = gr.Dropdown(label="Edit item", choices=[NEW_ITEM], value=NEW_ITEM)
+            ctx_name = gr.Textbox(label="Name", placeholder="e.g. My background")
+            ctx_scope = gr.Dropdown(
+                label="Applies to", choices=[(label, key) for key, label in AGENTS.items()], value="all"
+            )
+            ctx_text = gr.Textbox(
+                label="Context",
+                lines=4,
+                placeholder=(
+                    "e.g. I'm an English speaker around JLPT N4. I can read hiragana/katakana and "
+                    "~300 kanji. Always add romaji after example sentences. Keep answers short and "
+                    "use tables for vocabulary."
+                ),
+            )
+            with gr.Row():
+                ctx_save = gr.Button("Save", variant="primary", size="sm")
+                ctx_delete = gr.Button("Delete", variant="secondary", size="sm")
+            ctx_status = gr.Markdown()
+
+    with gr.Sidebar(label="Agents", open=False, position="right", width=460) as agents_panel:
+        gr.Markdown("### Agents")
         graph_view = gr.Checkbox(label="Graph view", value=False)
         architecture = gr.HTML(render_html())
-
-    gr.Markdown("# 日本語 tutor")
-    with gr.Accordion("Your context & preferences", open=False):
-        gr.Markdown(
-            "Saved notes the agents read on every message: your background, goals, how you "
-            "like answers formatted, ... Untick an item to switch it off without deleting it."
-        )
-        ctx_active = gr.CheckboxGroup(label="Active items", choices=[])
-        ctx_pick = gr.Dropdown(label="Edit item", choices=[NEW_ITEM], value=NEW_ITEM)
-        with gr.Row():
-            ctx_name = gr.Textbox(label="Name", placeholder="e.g. My background", scale=2)
-            ctx_scope = gr.Dropdown(
-                label="Applies to", choices=[(label, key) for key, label in AGENTS.items()], value="all", scale=1
-            )
-        ctx_text = gr.Textbox(
-            label="Context",
-            lines=4,
-            placeholder=(
-                "e.g. I'm an English speaker around JLPT N4. I can read hiragana/katakana and "
-                "~300 kanji. Always add romaji after example sentences. Keep answers short and "
-                "use tables for vocabulary."
-            ),
-        )
-        with gr.Row():
-            ctx_save = gr.Button("Save", variant="primary")
-            ctx_delete = gr.Button("Delete", variant="stop")
-        ctx_status = gr.Markdown()
-
-    chatbot = gr.Chatbot(height=600)
-    history = gr.State([])  # PydanticAI message history, one per browser tab
-    pending = gr.State(None)  # DeferredToolRequests waiting for approval
-    status = gr.State({})  # architecture node id -> status, for the side panel
-    log = gr.State([])  # LogEntry list for the activity log
-    with gr.Row():
-        approve_btn = gr.Button("Approve", variant="primary", visible=False)
-        reject_btn = gr.Button("Reject", variant="stop", visible=False)
-    box = gr.Textbox(placeholder="Ask anything, or paste Japanese text...", show_label=False)
-    clear = gr.Button("New chat")
-    with gr.Accordion("Activity log", open=True):
+        gr.Markdown("### Activity")
         log_view = gr.HTML(render_log([]))
+
+    with gr.Column(elem_id="main", scale=1):
+        chatbot = gr.Chatbot(
+            elem_id="chat",
+            show_label=False,
+            scale=1,
+            placeholder=PLACEHOLDER,
+            examples=EXAMPLES,
+            buttons=["copy"],
+        )
+        history = gr.State([])  # PydanticAI message history, one per browser tab
+        pending = gr.State(None)  # DeferredToolRequests waiting for approval
+        status = gr.State({})  # architecture node id -> status, for the side panel
+        log = gr.State([])  # LogEntry list for the activity log
+        with gr.Row(elem_id="approval"):
+            approve_btn = gr.Button("Approve", variant="primary", visible=False)
+            reject_btn = gr.Button("Reject", variant="secondary", visible=False)
+        box = gr.Textbox(
+            elem_id="composer",
+            placeholder="Ask anything, or paste Japanese text...",
+            show_label=False,
+            container=False,
+            lines=1,
+            max_lines=8,
+            submit_btn=True,
+            autofocus=True,
+        )
+        gr.Markdown("Open **Agents** on the right to watch each step.", elem_classes="hint")
 
     state = [chatbot, history, pending, status, log]
     out = [*state, architecture, log_view, approve_btn, reject_btn]
     box.submit(respond, [box, *state, graph_view], [box, *out])
+    chatbot.example_select(pick_example, None, box).then(respond, [box, *state, graph_view], [box, *out])
     approve_btn.click(approve, [*state, graph_view], out)
     reject_btn.click(reject, [*state, graph_view], out)
     clear.click(lambda graph: outputs([], [], None, {}, [], graph), graph_view, out)
     graph_view.change(architecture_html, [status, graph_view], architecture)
+
+    # Only one sidebar open at a time: opening either one closes the other
+    def close_sidebar():
+        return gr.Sidebar(open=False)
+
+    menu.expand(close_sidebar, None, agents_panel, queue=False, show_progress="hidden")
+    agents_panel.expand(close_sidebar, None, menu, queue=False, show_progress="hidden")
 
     # The file can change outside this tab, so reload the items whenever the page opens
     demo.load(lambda: context_lists(user_context.load()), None, [ctx_active, ctx_pick])
@@ -227,4 +353,4 @@ with gr.Blocks(title="jplearn") as demo:
     ctx_active.input(toggle_context, ctx_active, None)
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=THEME, css=CSS)
