@@ -1,6 +1,7 @@
-"""Checks that the dependencies we rely on work. Run: python scripts/healthcheck.py [--live]
+"""Check project dependencies and integration points before running jplearn.
 
---live also sends one tiny request to the LLM (costs a few tokens).
+The checks cover PydanticAI, model configuration, SudachiPy, JMdict, and the UI's agent
+diagram; ``--live`` additionally sends a small request through the configured model.
 """
 
 import asyncio
@@ -10,11 +11,16 @@ import traceback
 
 from dotenv import load_dotenv
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
+# Read the same local environment configuration used by the app.
 load_dotenv()
 
 results: list[tuple[str, bool, str]] = []
 
 
+# Collect each check independently so one failure does not hide later results.
 def check(name):
     def wrap(fn):
         try:
@@ -77,6 +83,7 @@ def _():
         raise RuntimeError("; ".join(problems) + " - update src/jplearn/architecture.py")
 
 
+# Make the external model call opt-in because it uses the configured service.
 if "--live" in sys.argv:
 
     @check("LLM round trip")
@@ -90,6 +97,7 @@ if "--live" in sys.argv:
         return f"{MODEL_NAME} -> {out.strip()}"
 
 
+# Print a compact report and return a failing process status if any check failed.
 width = max(len(name) for name, _, _ in results)
 for name, ok, detail in results:
     print(f"[{'OK' if ok else 'FAIL'}] {name.ljust(width)}  {detail}")

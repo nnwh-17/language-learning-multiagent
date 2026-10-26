@@ -1,6 +1,6 @@
-"""Tests the flashcard flow: orchestrator -> flashcard agent -> analyzer, then approval -> Anki.
+"""Smoke-test flashcard drafting, approval handling, and Anki writes.
 
-Run: python scripts/test_flashcards.py [--write]
+The flow covers orchestrator -> flashcard agent -> analyzer, then approval -> Anki.
 Needs Anki open. Uses the "jplearn-test" deck.
 --write  approves the add, checks the cards are in Anki, then deletes them
 (default: rejects the add, so nothing is written)
@@ -14,11 +14,15 @@ from pydantic_ai import DeferredToolRequests
 from jplearn.agents.orchestrator import describe_approval, orchestrator, tools_used
 from jplearn.anki import anki_toolset
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 DECK = "jplearn-test"
 TEXT = "ベルが鳴ったら、静かにしなければならない。"
 
 
 async def main() -> None:
+    # Draft a test batch and assert that the orchestrator pauses for approval.
     write = "--write" in sys.argv
 
     print("== orchestrator drafts cards")
@@ -29,6 +33,7 @@ async def main() -> None:
     assert call.tool_name == "add_flashcards"
     print(describe_approval(call))
 
+    # Exercise either branch of the approval flow; writes are opt-in for safety.
     print(f"\n== user {'approves' if write else 'rejects'}")
     result = await orchestrator.run(
         message_history=result.all_messages(),

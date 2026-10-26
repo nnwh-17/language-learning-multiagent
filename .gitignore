@@ -32,6 +32,7 @@ out/
 coverage/
 
 # Local databases and logs
+data/context.json
 *.db
 *.sqlite
 *.sqlite3

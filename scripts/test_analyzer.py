@@ -1,6 +1,7 @@
-"""Tests the tokenizer, the analyzer agent, and orchestrator -> analyzer delegation.
+"""Smoke-test tokenization, Japanese analysis, and orchestrator delegation.
 
-Run: python scripts/test_analyzer.py [sentence]
+The script prints each stage and verifies that both the analyzer and orchestrator use the
+expected tools. Run with an optional Japanese sentence to try different input.
 """
 
 import asyncio
@@ -10,10 +11,14 @@ from jplearn.agents.analyzer import analyzer
 from jplearn.agents.orchestrator import orchestrator, tools_used
 from jplearn.tokenizer import tokenize
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 SENTENCE = sys.argv[1] if len(sys.argv) > 1 else "静かな部屋で日本語を勉強しなければならない。"
 
 
 async def main() -> None:
+    # First inspect deterministic tokenization, then validate the LLM-backed analysis.
     print("== tokenizer (no LLM)")
     for t in tokenize(SENTENCE):
         conj = f"  [{t.conjugation}]" if t.conjugation else ""
@@ -29,6 +34,7 @@ async def main() -> None:
         print(f"  * {g.pattern}: {g.meaning}")
     assert "tokenize_japanese" in tools_used(result.all_messages()), "analyzer skipped the tokenizer"
 
+    # Ensure a natural-language breakdown request is routed to the specialist agent.
     print("\n== orchestrator delegates to analyzer")
     result = await orchestrator.run(f"Can you break down this sentence? {SENTENCE}")
     tools = tools_used(result.all_messages())

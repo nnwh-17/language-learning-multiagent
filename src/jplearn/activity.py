@@ -3,7 +3,7 @@
 Two ways things get recorded:
 - Every agent has the `Observe` capability, a PydanticAI hook that logs its run, each LLM
   call and each tool call, and marks the agent as running in the architecture panel.
-- Resources (tokenizer, dictionary, Anki MCP) mark themselves with `with track("jmdict"): ...`.
+- Tool and MCP nodes (tokenizer, dictionary, Anki MCP) mark themselves with `with track("jmdict"): ...`.
 
 Entries nest: anything that happens inside an agent run or tool call is logged one level
 deeper. The web UI runs the orchestrator through `Activity.watch()` and re-renders on every
@@ -29,6 +29,7 @@ _current: ContextVar["Activity | None"] = ContextVar("activity", default=None)
 _parent: ContextVar["LogEntry | None"] = ContextVar("activity_parent", default=None)
 _ids = itertools.count()
 
+# Event kinds are shared with the web activity-log renderer.
 EntryKind = Literal["user", "agent", "llm", "tool", "resource", "info", "error"]
 
 
@@ -48,6 +49,7 @@ class LogEntry:
 def tree_order(entries: list[LogEntry]) -> list[LogEntry]:
     """Entries with each one's children directly below it (in start order), so parallel
     tool calls don't interleave."""
+    # Rebuild parent-child grouping so concurrent operations display as nested branches.
     known = {entry.id for entry in entries}
     children: dict[int | None, list[LogEntry]] = {}
     for entry in entries:
@@ -62,6 +64,11 @@ def tree_order(entries: list[LogEntry]) -> list[LogEntry]:
 
     visit(None)
     return ordered
+
+
+def is_output_tool(tool_name: str) -> bool:
+    """Whether a tool call is PydanticAI returning structured output, not a real tool."""
+    return tool_name.startswith("final_result")
 
 
 def _short(value: Any, limit: int = 70) -> str:
@@ -81,6 +88,7 @@ class Activity:
         self.result: Any = None
 
     def status(self) -> dict[str, Status]:
+        # Running takes precedence if a node has both completed and active parallel work.
         status: dict[str, Status] = {node_id: "done" for node_id in self._done}
         status |= {node_id: "running" for node_id, n in self._running.items() if n}
         return status
@@ -132,6 +140,7 @@ class Activity:
 def span(kind: EntryKind, text: str, node_ids: Iterable[str] = ()):
     """Log `text`, mark `node_ids` as running, and log everything inside one level deeper.
     Yields the log entry (or None when nothing is being recorded) so details can be added."""
+    # Outside Activity.watch(), instrumentation is intentionally a no-op.
     activity = _current.get()
     if activity is None:
         yield None
@@ -157,7 +166,8 @@ def span(kind: EntryKind, text: str, node_ids: Iterable[str] = ()):
 
 @contextmanager
 def track(node_id: str):
-    """Mark a resource from jplearn.architecture (e.g. "jmdict") as in use inside this block."""
+    """Mark a tool or MCP node from jplearn.architecture (e.g. "jmdict") as in use inside
+    this block. It is logged as a "resource" entry, to tell it apart from an agent's tool call."""
     with span("resource", all_nodes()[node_id].label, [node_id]):
         yield
 
@@ -188,12 +198,13 @@ class Observe(AbstractCapability[Any]):
             return await handler()
 
     async def wrap_model_request(self, ctx: RunContext, *, request_context, handler):
+        # Record token use and tool requests alongside the model call in the activity tree.
         with span("llm", f"LLM call #{ctx.run_step}") as entry:
             response = await handler(request_context)
             if entry:
                 usage = response.usage
                 calls = [
-                    "answer" if p.tool_name.startswith("final_result") else p.tool_name
+                    "answer" if is_output_tool(p.tool_name) else p.tool_name
                     for p in response.parts
                     if p.part_kind == "tool-call"
                 ]
@@ -202,7 +213,7 @@ class Observe(AbstractCapability[Any]):
             return response
 
     async def wrap_tool_execute(self, ctx: RunContext, *, call, tool_def, args, handler):
-        if call.tool_name.startswith("final_result"):  # structured output, not a real tool
+        if is_output_tool(call.tool_name):
             return await handler(args)
         with span("tool", call.tool_name) as entry:
             if entry:

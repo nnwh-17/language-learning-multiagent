@@ -1,14 +1,19 @@
-"""Tests the Anki MCP server. Run: python scripts/test_anki_mcp.py [--write] [--agent]
+"""Smoke-test Anki MCP connectivity and its deck/note operations.
 
-Needs Anki desktop open with AnkiConnect. Default checks are read-only.
+Requires Anki desktop open with AnkiConnect. Default checks are read-only.
 --write  adds a test note to a "jplearn-test" deck, reads it back, then deletes it
 --agent  asks an LLM agent (with the Anki tools) what decks you have
+
+The shared toolsets and allowed tool names come from ``jplearn.anki``.
 """
 
 import asyncio
 import sys
 
 from jplearn.anki import FLASHCARD_TOOLS, LOG_FILE, anki_toolset, flashcard_toolset
+
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
 
 TEST_DECK = "jplearn-test"
 
@@ -18,6 +23,7 @@ def step(name: str, detail: object = "") -> None:
 
 
 async def read_checks(ts) -> None:
+    """Verify expected tools and read basic collection metadata without changes."""
     tools = {t.name for t in await ts.list_tools()}
     step("server started", f"{len(tools)} tools")
     missing = FLASHCARD_TOOLS - tools
@@ -33,6 +39,7 @@ async def read_checks(ts) -> None:
 
 
 async def write_checks(ts) -> None:
+    """Create, read, and delete one disposable note in the test deck."""
     await ts.direct_call_tool("createDeck", {"deckName": TEST_DECK})
     step("createDeck", TEST_DECK)
 
@@ -74,6 +81,7 @@ async def agent_check() -> None:
 
 
 async def main() -> None:
+    # Keep the MCP process scoped to the checks; write mode is explicitly opt-in.
     async with anki_toolset(read_only="--write" not in sys.argv) as ts:
         await read_checks(ts)
         if "--write" in sys.argv:

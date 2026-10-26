@@ -1,5 +1,10 @@
-"""Japanese tokenization with SudachiPy, with labels translated to English for the LLM."""
+"""Tokenize Japanese into readings, dictionary forms, and English part-of-speech labels.
 
+The analyzer and example generator use this shared SudachiPy wrapper to ground model
+outputs and validate generated sentences.
+"""
+
+import threading
 from functools import cache
 
 from pydantic import BaseModel
@@ -47,11 +52,24 @@ class Token(BaseModel):
 
 
 @cache
+def _dictionary() -> Dictionary:
+    # Loading Sudachi's system dictionary is expensive, so share it process-wide.
+    return Dictionary()
+
+
+_local = threading.local()
+
+
 def _tokenizer():
-    return Dictionary().tokenizer()
+    """A Sudachi tokenizer can't be used by two threads at once, and PydanticAI runs sync
+    tools in worker threads (sometimes in parallel), so each thread gets its own."""
+    if not hasattr(_local, "tokenizer"):
+        _local.tokenizer = _dictionary().tokenizer()
+    return _local.tokenizer
 
 
 def to_hiragana(katakana: str) -> str:
+    """Convert katakana characters to hiragana, leaving everything else unchanged."""
     return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in katakana)
 
 
@@ -69,6 +87,7 @@ def _reading(text: str) -> str:
 def tokenize(text: str) -> list[Token]:
     """Split Japanese text into words with reading, dictionary form and part of speech."""
     tokens = []
+    # Convert Sudachi's token metadata into stable, English-labelled model input.
     for m in _tokenizer().tokenize(text, SplitMode.C):
         pos = m.part_of_speech()
         if pos[0] in SKIP_POS:

@@ -1,20 +1,26 @@
-"""Downloads JMdict (English, via jmdict-simplified) and builds data/jmdict.sqlite.
+"""Download English JMdict data and build the local SQLite database.
 
-Run once: python scripts/setup_dictionary.py   (re-run any time to update)
+``jplearn.dictionary`` reads the generated ``data/jmdict.sqlite`` file. Run this script
+once during setup or again to refresh the source data.
 """
 
 import io
 import json
 import sqlite3
+import sys
 import urllib.request
 import zipfile
 
 from jplearn.dictionary import DB_PATH
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 RELEASES = "https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest"
 
 
 def download() -> dict:
+    """Fetch the latest English JMdict release asset and parse its JSON contents."""
     with urllib.request.urlopen(RELEASES) as r:
         release = json.load(r)
     asset = next(
@@ -29,10 +35,12 @@ def download() -> dict:
 
 
 def build(jmdict: dict) -> None:
+    """Create an indexed temporary database, then replace the previous dictionary."""
     DB_PATH.parent.mkdir(exist_ok=True)
     tmp = DB_PATH.with_suffix(".tmp")
     tmp.unlink(missing_ok=True)
     db = sqlite3.connect(tmp)
+    # Store entries as source JSON and index every kanji/kana form for exact lookup.
     db.executescript("""
         CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE entries (id INTEGER PRIMARY KEY, common INTEGER, data TEXT);
@@ -42,6 +50,7 @@ def build(jmdict: dict) -> None:
     db.execute("INSERT INTO meta VALUES ('version', ?)", (jmdict["dictDate"],))
     db.execute("INSERT INTO meta VALUES ('tags', ?)", (json.dumps(jmdict["tags"], ensure_ascii=False),))
 
+    # Insert each dictionary entry and all searchable spellings.
     for word in jmdict["words"]:
         forms = word["kanji"] + word["kana"]
         common = any(f["common"] for f in forms)
@@ -54,6 +63,7 @@ def build(jmdict: dict) -> None:
         )
     db.commit()
     db.close()
+    # Publish the complete database only after the new file has been written successfully.
     DB_PATH.unlink(missing_ok=True)
     tmp.rename(DB_PATH)
     print(f"Built {DB_PATH} with {len(jmdict['words'])} entries (JMdict {jmdict['dictDate']})")

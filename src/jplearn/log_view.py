@@ -1,4 +1,7 @@
-"""HTML for the activity log shown under the chat."""
+"""Render the nested activity events produced by ``activity.py`` as chat HTML.
+
+The web frontend refreshes this view as agent, model, tool, and resource spans change.
+"""
 
 import html
 import time
@@ -48,6 +51,7 @@ CSS = """
 def _row(entry: LogEntry) -> str:
     e = html.escape
     clock = time.strftime("%H:%M:%S", time.localtime(entry.time))
+    # Show elapsed duration or failure state beside each event.
     if entry.status == "running":
         dur = "running…"
     elif entry.status == "error":
@@ -68,6 +72,7 @@ def _row(entry: LogEntry) -> str:
 
 
 def render_log(entries: list[LogEntry]) -> str:
+    # Bound the view size, and reorder parallel events into their parent-child tree.
     rows = "".join(_row(entry) for entry in tree_order(entries[-MAX_ROWS:]))
     body = rows or "<div class='empty'>Nothing yet. Send a message to see the agents at work.</div>"
     # column-reverse keeps the box scrolled to the newest entry; the inner div keeps the order
