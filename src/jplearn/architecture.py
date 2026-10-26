@@ -65,6 +65,13 @@ examples = Node(
     calls=[("lookup_word", jmdict), ("output check", tokenizer)],
     checks={"output check"},
 )
+explainer = Node(
+    "explainer",
+    "Explainer",
+    "agent",
+    "analogies, comparisons and common mistakes",
+    calls=[("lookup_word", jmdict)],
+)
 orchestrator = Node(
     "orchestrator",
     "Orchestrator",
@@ -73,6 +80,7 @@ orchestrator = Node(
     calls=[
         ("analyze_japanese", analyzer),
         ("lookup_word", jmdict),
+        ("explain_concept", explainer),
         ("draft_flashcards", flashcards),
         ("add_flashcards", anki_write),
         ("add_examples_to_card", anki_write),
@@ -108,6 +116,7 @@ def check_against_agents() -> list[str]:
     """Differences between this diagram and the tools the agents actually have."""
     from jplearn.agents.analyzer import analyzer as analyzer_agent
     from jplearn.agents.examples import examples_agent
+    from jplearn.agents.explainer import explainer as explainer_agent
     from jplearn.agents.flashcards import flashcard_agent
     from jplearn.agents.orchestrator import orchestrator as orchestrator_agent
     from jplearn.agents.researcher import researcher as researcher_agent
@@ -120,6 +129,7 @@ def check_against_agents() -> list[str]:
         (flashcards, flashcard_agent),
         (researcher, researcher_agent),
         (examples, examples_agent),
+        (explainer, explainer_agent),
     ]:
         # MCP toolsets only know their tools once connected, so compare function tools only
         actual = {name for ts in agent.toolsets for name in getattr(ts, "tools", {})}

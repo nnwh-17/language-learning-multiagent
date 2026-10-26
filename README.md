@@ -52,6 +52,7 @@ src/jplearn/
     analyzer.py      word-by-word breakdown (tokenizer + JMdict)
     flashcards.py    drafts Anki cards; also the Anki write helpers
     examples.py      example sentences, checked to contain each word
+    explainer.py     explains concepts with analogies, comparisons and common mistakes
     researcher.py    finds Japanese reading material on the web
   tokenizer.py       SudachiPy wrapper (readings, dictionary forms, POS)
   dictionary.py      JMdict lookups from data/jmdict.sqlite

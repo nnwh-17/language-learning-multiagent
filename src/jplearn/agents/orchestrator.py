@@ -11,6 +11,7 @@ from pydantic_ai.messages import ModelMessage, ToolCallPart
 from jplearn.activity import Observe, is_output_tool, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.agents.examples import ExampleSet, examples_agent
+from jplearn.agents.explainer import Explanation, explainer
 from jplearn.agents.flashcards import (
     Card,
     CardDraft,
@@ -48,6 +49,11 @@ Specialists (tools):
   Japanese text to understand, rather than analysing it yourself.
 - `lookup_word`: JMdict dictionary entry for a single word. Use it for "what does X
   mean / how do you read X" questions, and base your answer on it.
+- `explain_concept`: explains a grammar point, word, nuance or cultural idea with
+  analogies, comparisons to related items, examples and common mistakes. Use it for
+  "why / how does X work / what's the difference between X and Y / I don't get X"
+  questions. Present its explanation conversationally; keep the analogy's limits and
+  end with its check question.
 - `draft_flashcards`: drafts NEW Anki cards for the words and grammar found in Japanese
   text (or a list of words). It does NOT add them. It breaks the text down itself, so don't
   call `analyze_japanese` first.
@@ -97,6 +103,15 @@ def lookup_word(word: str, reading: str | None = None) -> list[DictEntry]:
     `reading` (hiragana) optionally narrows homographs. Returns up to 3 entries."""
     with track("jmdict"):
         return lookup(word, reading)
+
+
+@orchestrator.tool
+async def explain_concept(ctx: RunContext, topic: str, request: str = "") -> Explanation:
+    """Explain a Japanese concept with analogies and comparisons. `topic` is what to explain,
+    e.g. 'は vs が' or '〜てしまう'; `request` holds the user's question or what confuses them."""
+    prompt = f"Topic: {topic}" + (f"\nThe user asked: {request}" if request else "")
+    result = await explainer.run(prompt, usage=ctx.usage)
+    return result.output
 
 
 @orchestrator.tool
