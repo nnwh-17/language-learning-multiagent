@@ -13,6 +13,9 @@ flowchart TD
     O -->|draft_flashcards| F[Flashcard agent]
     O -->|generate_examples| E[Example sentences]
     O -->|find_material| R[Researcher]
+    O -->|start_quiz| Q[Quiz maker]
+    Q --> J
+    Q -.->|output check| T
     O -->|lookup_word| J[(JMdict)]
     O -->|"add_flashcards 🔒<br>add_examples_to_card 🔒"| AW[Anki MCP]
     A --> T[Sudachi tokenizer]
@@ -119,13 +122,54 @@ agents or to one, and can be switched off without deleting it.
 enabled notes on every run and edits apply from the next message without a restart. The web
 UI edits them under **Menu → Preferences**.
 
+## Quizzes (web UI)
+
+Asking to be quizzed ("quiz me on N5 verbs") opens a quiz panel under the chat. The pieces:
+
+1. The orchestrator calls `start_quiz`, which runs the Quiz maker and returns the `Quiz` as
+   tool-result **metadata**. Metadata stays in the chat history but is never sent to the
+   model.
+2. After each turn, `sync_quiz` in `web.py` looks for the latest unfinished quiz in the
+   history (`quiz_view.active_quiz`) and opens the panel on question 1. The same step runs
+   when a chat is opened or the page reloads, so an unfinished quiz comes back with its chat.
+3. [quiz_view.py](../src/jplearn/quiz_view.py) keeps a `QuizSession` (which question, what
+   was answered) in the tab's state and renders one question at a time with a progress bar.
+   Choices are marked as soon as one is clicked; typed answers on Enter or **Check**. Each
+   answer shows right/wrong and a short explanation straight away. No model call is needed
+   for marking.
+4. After the last question (**See results**), or on **End quiz**, the results go into the
+   chat as the learner's message and to the orchestrator as a prompt starting with
+   `[quiz <id> finished]`. The orchestrator replies with feedback on the mistakes. That
+   marker also tells `active_quiz` the quiz is done, so it doesn't reopen.
+
+## Saved chats (web UI)
+
+[conversations.py](../src/jplearn/conversations.py) saves each web chat to
+`data/chats/<id>.json` after every turn, so chats survive a page reload or an app restart.
+Each file holds:
+
+- `messages`: what the chat window shows.
+- `history`: the PydanticAI message history, so the orchestrator remembers the conversation
+  when you carry on.
+- `pending`: ids of Anki writes still waiting for approval. On reopening, `pending_approvals()`
+  rebuilds the approval request from the history, so Approve/Reject still work.
+
+The left sidebar lists saved chats, newest first, titled with your first message. Opening
+the page carries on with the most recent chat; **New chat** starts a fresh one, and **Delete
+this chat** removes the open one. Saving runs as a separate Gradio step chained with
+`.then()` after each turn.
+
+Chats are not shared between agents or across chats: each conversation only remembers
+itself. Lasting facts about the learner belong in Preferences. The terminal chat doesn't
+save.
+
 ## Web UI layout
 
 [web.py](../src/jplearn/web.py) builds a Gradio page with three areas:
 
-- **Left sidebar:** new chat and Preferences.
-- **Centre:** the conversation, the Approve/Reject buttons and the message box. The box is
-  locked while a turn is running.
+- **Left sidebar:** new chat, saved chats, and Preferences.
+- **Centre:** the conversation, the quiz panel (while a quiz is running), the
+  Approve/Reject buttons and the message box. The box is locked while a turn is running.
 - **Right sidebar:** the Agents graph (tree or graph view) and the Activity log.
 
 Styling lives in [theme.py](../src/jplearn/theme.py); the agents panel and log carry their

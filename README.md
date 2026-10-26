@@ -2,7 +2,8 @@
 
 A multi-agent Japanese tutor for English speakers. You chat with one agent, which plans each
 request and hands parts of it to specialists: sentence breakdowns, explanations with
-analogies, example sentences, reading material from the web, and Anki flashcards. Japanese
+analogies, example sentences, interactive quizzes, reading material from the web, and Anki
+flashcards. Japanese
 facts come from a tokenizer (SudachiPy) and a local dictionary (JMdict) rather than the
 model's memory, and nothing is written to Anki until you approve it.
 
@@ -79,13 +80,17 @@ src/jplearn/
     examples.py      example sentences, checked to contain each word
     explainer.py     explains concepts with analogies, comparisons and common mistakes
     researcher.py    finds Japanese reading material on the web
+    quiz.py          writes quizzes and marks answers (kana, romaji or kanji)
   tokenizer.py       SudachiPy wrapper (readings, dictionary forms, POS)
   dictionary.py      JMdict lookups from data/jmdict.sqlite
   anki.py            Anki MCP server toolsets
   user_context.py    saved learner preferences (data/context.json) added to agent instructions
+  conversations.py   saved web chats (data/chats/), reopened after a reload or restart
   architecture.py    the agent/tool diagram in the web UI's side panel
   activity.py        live activity tracking for that panel and the log
   log_view.py        renders the activity log
+  quiz_view.py       the web UI's interactive quiz panel
+  kana.py            romaji → hiragana, furigana rendering
   web.py, theme.py   Gradio web UI and its styling
   chat.py            terminal UI
 ```

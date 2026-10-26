@@ -4,18 +4,20 @@ This frontend manages per-tab conversation and approval state, streams activity 
 and provides controls for viewing the agent graph and editing saved learner context.
 """
 
-import re
 import time
 
 import gradio as gr
 from pydantic_ai import DeferredToolRequests, ToolDenied
 from pydantic_ai.messages import ModelMessage
 
-from jplearn import user_context
+from jplearn import conversations, user_context
 from jplearn.activity import Activity, LogEntry
 from jplearn.agents.orchestrator import describe_approval, orchestrator, stream_reply, tools_used
 from jplearn.architecture import Status, all_nodes, approval_targets, render_html
+from jplearn.kana import with_furigana
+from jplearn import quiz_view
 from jplearn.log_view import render_log
+from jplearn.quiz_view import QuizSession
 from jplearn.theme import CSS, THEME
 from jplearn.user_context import AGENTS, ALL, ContextItem
 
@@ -30,14 +32,6 @@ COMPOSER_HINTS = {
     "busy": "Working on it...",
     "approval": "Approve or reject above, or reply to change the request...",
 }
-
-# Kanji followed by a hiragana reading in brackets, e.g. 食(た)べる or 日本語（にほんご）
-FURIGANA = re.compile(r"([一-鿿々]+)[(（]([ぁ-ゖー]+)[)）]")
-
-
-def with_furigana(markdown: str) -> str:
-    """Show readings written as 漢字(かんじ) above the kanji instead of in brackets."""
-    return FURIGANA.sub(r"<ruby>\1<rp>(</rp><rt>\2</rt><rp>)</rp></ruby>", markdown)
 
 
 def steps_message(plan: list[str], tools: list[str], seconds: float) -> dict | None:
@@ -200,6 +194,60 @@ async def reject(chat, history, pending, status, log, graph):
         yield update
 
 
+# --- quiz panel (see quiz_view.py). Its values: [quiz_state, *quiz_ui] ---
+
+
+def sync_quiz(history, session: QuizSession | None):
+    """Show the chat's unfinished quiz, keep the one in progress, or hide the panel."""
+    found = quiz_view.active_quiz(history)
+    if found is None:
+        return None, *quiz_view.render(None)
+    if session is not None and session.id == found.id:
+        return (gr.skip(),) * (1 + QUIZ_UI_SIZE)  # already showing; keep the learner's progress
+    return found, *quiz_view.render(found)
+
+
+def check_answer(session: QuizSession | None, choice: str | None, typed: str):
+    if session is None or session.checked:
+        return (gr.skip(),) * (1 + QUIZ_UI_SIZE)
+    response = (choice if session.question.kind == "choice" else typed) or ""
+    if not response.strip():
+        return session, *quiz_view.render(session, notice="Choose or type an answer first.")
+    session = quiz_view.answer(session, response.strip())
+    return session, *quiz_view.render(session)
+
+
+async def finish_quiz(session: QuizSession | None, chat, history, pending, status, log, graph):
+    """Close the panel and send the results to the orchestrator for feedback.
+    Values for [*out, quiz_state, *quiz_ui]."""
+    if session is None:
+        yield (gr.skip(),) * (OUT_SIZE + 1 + QUIZ_UI_SIZE)
+        return
+    chat = chat + [{"role": "user", "content": quiz_view.results_markdown(session)}]
+    log.append(user_entry("Quiz finished", f"{session.score}/{len(session.quiz.questions)}"))
+    run_kwargs = {"user_prompt": quiz_view.results_prompt(session), "message_history": history}
+    if pending is not None:  # an approval left waiting is rejected, as when replying instead
+        run_kwargs["deferred_tool_results"] = pending.build_results(
+            approvals={c.tool_call_id: ToolDenied("User finished a quiz instead") for c in pending.approvals}
+        )
+    async for update in run_turn(chat, history, log, **run_kwargs):
+        yield *outputs(*update, graph), None, *quiz_view.render(None)
+
+
+async def advance_quiz(session: QuizSession | None, chat, history, pending, status, log, graph):
+    """Next question, or the results after the last one."""
+    if session is not None and session.checked and not session.is_last:
+        session = quiz_view.next_question(session)
+        yield *(gr.skip(),) * OUT_SIZE, session, *quiz_view.render(session)
+        return
+    async for update in finish_quiz(session, chat, history, pending, status, log, graph):
+        yield update
+
+
+QUIZ_UI_SIZE = len(quiz_view.render(None))
+OUT_SIZE = len(outputs([], [], None, {}, [], False, False))  # values in `out`
+
+
 def context_lists(items: list[ContextItem], selected: str = NEW_ITEM):
     """Updates for [active checkboxes, edit dropdown] after the saved items changed."""
     names = [i.name for i in items]
@@ -237,6 +285,46 @@ def toggle_context(names: list[str]):
     user_context.set_enabled(set(names))
 
 
+def chat_list(selected: str | None = None) -> gr.Radio:
+    """The sidebar's list of saved chats, newest first."""
+    return gr.Radio(choices=[(c.title, c.id) for c in conversations.list_chats()], value=selected)
+
+
+def save_chat(chat_id: str | None, chat, history, pending):
+    """Save the conversation after each turn. Returns [chat_id, chat list]."""
+    if not chat:
+        return chat_id, chat_list(chat_id)
+    chat_id = conversations.save(chat_id, chat, history, pending)
+    return chat_id, chat_list(chat_id)
+
+
+def open_chat(chat_id: str | None, graph: bool):
+    """Values for [*out, chat_id] showing a saved chat, or an empty one."""
+    saved = conversations.load(chat_id) if chat_id else None
+    if saved is None:
+        return *outputs([], [], None, {}, [], False, graph, clear_box=True), None
+    pending = conversations.pending_approvals(saved)
+    return *outputs(saved.messages, saved.history, pending, {}, [], False, graph, clear_box=True), saved.id
+
+
+def new_chat(graph: bool):
+    """Values for [*out, chat_id, chat list]: an empty chat, nothing selected."""
+    return *open_chat(None, graph), chat_list()
+
+
+def delete_chat(chat_id: str | None, graph: bool):
+    if chat_id:
+        conversations.delete(chat_id)
+    return new_chat(graph)
+
+
+def reopen_latest_chat(graph: bool):
+    """On page load, carry on with the most recent chat."""
+    chats = conversations.list_chats()
+    latest = chats[0].id if chats else None
+    return *open_chat(latest, graph), chat_list(latest)
+
+
 PLACEHOLDER = """## How can I help you study today?
 
 Ask why something works the way it does, paste Japanese text to break down, find
@@ -245,7 +333,7 @@ something to read, or make Anki cards."""
 EXAMPLES = [
     {"text": "Break down: 昨日、友達と一緒に新しいレストランに行きました。"},
     {"text": "What's the difference between は and が?"},
-    {"text": "Find me an easy news article to read"},
+    {"text": "Quiz me on basic N5 verbs"},
     {"text": "Make Anki flashcards for 勉強, 練習 and 復習"},
 ]
 
@@ -259,6 +347,8 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
     with gr.Sidebar(label="Menu", open=True, position="left", width=300) as menu:
         gr.Markdown("## 日本語 tutor", elem_classes="brand")
         clear = gr.Button("＋  New chat", elem_id="new-chat", variant="secondary")
+        chats = gr.Radio(label="Chats", choices=[], elem_id="chats")
+        delete_chat_btn = gr.Button("Delete this chat", elem_id="delete-chat", variant="secondary", size="sm")
         with gr.Accordion("Preferences", open=False, elem_classes="side-section"):
             gr.Markdown(
                 "Notes the agents read on every message: your background, goals, how you like "
@@ -304,6 +394,18 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
         pending = gr.State(None)  # DeferredToolRequests waiting for approval
         status = gr.State({})  # architecture node id -> status, for the side panel
         log = gr.State([])  # LogEntry list for the activity log
+        chat_id = gr.State(None)  # id of the saved chat shown in this tab (None until the first save)
+        quiz_state = gr.State(None)  # QuizSession for the quiz panel, or None
+        with gr.Column(elem_id="quiz", visible=False) as quiz_panel:
+            quiz_progress = gr.HTML()
+            quiz_question = gr.Markdown(elem_id="quiz-question")
+            quiz_choices = gr.Radio(choices=[], show_label=False, elem_id="quiz-choices", container=False)
+            quiz_typed = gr.Textbox(show_label=False, container=False, elem_id="quiz-typed")
+            quiz_feedback = gr.Markdown(elem_id="quiz-feedback")
+            with gr.Row(elem_id="quiz-actions"):
+                quiz_check = gr.Button("Check", variant="primary", size="sm")
+                quiz_next = gr.Button("Next question →", variant="primary", size="sm", visible=False)
+                quiz_end = gr.Button("End quiz", variant="secondary", size="sm")
         with gr.Row(elem_id="approval"):
             approve_btn = gr.Button("Approve", variant="primary", visible=False)
             reject_btn = gr.Button("Reject", variant="secondary", visible=False)
@@ -321,11 +423,27 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
 
     state = [chatbot, history, pending, status, log]
     out = [box, *state, architecture, log_view, approve_btn, reject_btn]
-    box.submit(respond, [box, *state, graph_view], out)
-    chatbot.example_select(pick_example, None, box).then(respond, [box, *state, graph_view], out)
-    approve_btn.click(approve, [*state, graph_view], out)
-    reject_btn.click(reject, [*state, graph_view], out)
-    clear.click(lambda graph: outputs([], [], None, {}, [], False, graph, clear_box=True), graph_view, out)
+    quiz_ui = [quiz_panel, quiz_progress, quiz_question, quiz_choices, quiz_typed, quiz_feedback, quiz_check, quiz_next]
+    # Every turn is followed by a save, so chats survive a reload or restart, and by a quiz
+    # sync, which opens a quiz the turn started (or the open chat's unfinished one)
+    save = (save_chat, [chat_id, chatbot, history, pending], [chat_id, chats])
+    sync = (sync_quiz, [history, quiz_state], [quiz_state, *quiz_ui])
+    box.submit(respond, [box, *state, graph_view], out).then(*save).then(*sync)
+    chatbot.example_select(pick_example, None, box).then(respond, [box, *state, graph_view], out).then(*save).then(*sync)
+    approve_btn.click(approve, [*state, graph_view], out).then(*save).then(*sync)
+    reject_btn.click(reject, [*state, graph_view], out).then(*save).then(*sync)
+    clear.click(new_chat, graph_view, [*out, chat_id, chats]).then(*sync)
+    chats.input(open_chat, [chats, graph_view], [*out, chat_id]).then(*sync)
+    delete_chat_btn.click(delete_chat, [chat_id, graph_view], [*out, chat_id, chats]).then(*sync)
+    demo.load(reopen_latest_chat, graph_view, [*out, chat_id, chats]).then(*sync)
+
+    # Choices are marked as soon as one is clicked; typed answers on Enter or Check
+    check = (check_answer, [quiz_state, quiz_choices, quiz_typed], [quiz_state, *quiz_ui])
+    quiz_choices.input(*check)
+    quiz_typed.submit(*check)
+    quiz_check.click(*check)
+    quiz_next.click(advance_quiz, [quiz_state, *state, graph_view], [*out, quiz_state, *quiz_ui]).then(*save)
+    quiz_end.click(finish_quiz, [quiz_state, *state, graph_view], [*out, quiz_state, *quiz_ui]).then(*save)
     graph_view.change(architecture_html, [status, graph_view], architecture)
 
     # Only one sidebar open at a time: opening either one closes the other

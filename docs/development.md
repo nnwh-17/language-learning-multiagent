@@ -21,7 +21,8 @@ same on any machine and in CI (GitHub Actions runs them on every push and pull r
   output doesn't matter.
 - **Tiny dictionary:** a four-word JMdict database is built with `build_database()` for the
   test session, instead of the 170 MB real one.
-- **Throwaway preferences:** each test gets its own empty `context.json`.
+- **Throwaway preferences and chats:** each test gets its own empty `context.json` and chats
+  folder.
 - **Fake Anki:** `FakeAnki` in [test_agents.py](../tests/test_agents.py) answers the few MCP
   calls `flashcards.py` makes.
 
@@ -31,6 +32,8 @@ same on any machine and in CI (GitHub Actions runs them on every push and pull r
 | `test_app_state.py` | Saved preferences, activity tracking, the agents diagram matches the code |
 | `test_agents.py` | Routing to specialists, user context in instructions, approve/reject, Anki write helpers |
 | `test_web.py` | A full web turn: streaming, locked composer, replying instead of approving, errors, furigana |
+| `test_conversations.py` | Saving and reopening chats, resuming history, a pending approval surviving a reload |
+| `test_quiz.py` | Romaji input, marking, the question check, the quiz panel, a whole quiz played through the web UI |
 
 When you add a feature, add a test next to the closest existing one. For a new agent, copy
 `test_orchestrator_delegates_to_explainer_with_users_context`.

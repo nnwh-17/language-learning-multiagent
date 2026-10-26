@@ -13,6 +13,7 @@ tools. The orchestrator decides which one to use from the tool descriptions in i
 | Flashcard agent (`flashcards`) | `draft_flashcards` | `break_down` (runs the Analyzer), `findNotes` (Anki, read-only) | `CardDraft` |
 | Example sentences (`examples`) | `generate_examples` | `lookup_word` (JMdict), plus an output check | `ExampleSet` |
 | Researcher (`researcher`) | `find_material` | `search_web` (DuckDuckGo), `fetch_page` | `Material` |
+| Quiz maker (`quiz`) | `start_quiz` | `lookup_word` (JMdict), plus an output check | `Quiz` (shown in the quiz panel) |
 
 The orchestrator also has `lookup_word` (JMdict) for quick "what does X mean" questions, and
 the two Anki write tools that need approval: `add_flashcards` and `add_examples_to_card`.
@@ -88,6 +89,23 @@ web and returns one passage (at most ~600 characters) with its URL, level and su
   to 8,000 characters with a 20-second timeout.
 - Network errors are returned to the model as text, so one failed fetch doesn't end the run.
 - Returns at most 4 lines of song lyrics, for copyright reasons.
+
+## Quiz maker
+
+[quiz.py](../src/jplearn/agents/quiz.py). Writes short quizzes (default 5 questions at the
+learner's level) that the learner answers in the web UI's quiz panel.
+
+- Three kinds of question: `choice` (pick one option), `reading` (type the kana reading of
+  `word`) and `fill_in` (type what goes in the ＿＿ gap).
+- **Output check:** `check_quiz` sends questions back when the answer isn't one of the
+  options, a reading doesn't match the tokenizer, a prompt gives the reading away, or a
+  fill-in has no gap. The model gets up to 2 retries.
+- **Marking:** `grade()` compares typed answers after `normalize_answer()`, which accepts
+  hiragana, katakana, romaji (`benkyou`) and kanji (見ています → みています). Particles also
+  match how they sound in romaji (`wa` for は).
+- `start_quiz` returns the quiz as `ToolReturn` **metadata**: the UI gets the questions and
+  answers, while the orchestrator only learns that a quiz is showing, so it can't give the
+  answers away. See [architecture.md](architecture.md#quizzes-web-ui) for the panel.
 
 ## Adding an agent
 

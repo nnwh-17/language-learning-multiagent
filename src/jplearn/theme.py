@@ -10,7 +10,10 @@ THEME = gr.themes.Base(
     primary_hue="orange",
     neutral_hue="stone",
     radius_size="lg",
-    font=["ui-sans-serif", "-apple-system", "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", "sans-serif"],
+    font=[
+        "Bold Hiragana", "ui-sans-serif", "-apple-system", "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo",
+        "sans-serif",
+    ],
     font_mono=["ui-monospace", "Cascadia Code", "Consolas", "monospace"],
 ).set(
     body_background_fill="#faf9f5",
@@ -48,8 +51,15 @@ THEME = gr.themes.Base(
     button_secondary_background_fill_hover_dark="#3a3a37",
 )
 
-SERIF = 'ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif'
+SERIF = '"Bold Hiragana", ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif'
 CSS = f"""
+/* Hiragana is much thinner than kanji at normal weight, so it gets a bold face of its own.
+   unicode-range limits this font to hiragana; everything else falls through to the next
+   font in the stack. Declared for all weights so the browser never fakes extra bold. */
+@font-face {{ font-family: "Bold Hiragana"; font-weight: 100 900; unicode-range: U+3040-309F;
+  src: local("Yu Gothic Bold"), local("YuGothic-Bold"), local("Hiragino Sans W6"), local("HiraginoSans-W6"),
+       local("Meiryo Bold"), local("Meiryo-Bold"), local("Noto Sans JP Bold"), local("NotoSansJP-Bold"); }}
+
 footer {{ display: none !important; }}
 .gradio-container {{ max-width: 100% !important; }}
 
@@ -82,6 +92,30 @@ footer {{ display: none !important; }}
 #chat ruby rt {{ font-size: 0.55em; color: var(--body-text-color-subdued); }}
 #chat .message {{ ruby-position: over; }}
 
+/* Quiz panel: a card under the chat, one question at a time */
+#quiz {{ border: 1px solid var(--border-color-primary) !important; border-radius: 16px !important;
+  background: var(--block-background-fill) !important; padding: 14px 16px !important; gap: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }}
+#quiz .quiz-head {{ display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
+  color: var(--body-text-color-subdued); }}
+#quiz .quiz-head b {{ color: var(--body-text-color); font-weight: 600; }}
+#quiz .quiz-bar {{ display: flex; gap: 4px; margin-top: 8px; }}
+#quiz .quiz-bar .step {{ flex: 1; height: 5px; border-radius: 3px; background: var(--border-color-primary); }}
+#quiz .quiz-bar .step.current {{ background: var(--color-accent); opacity: 0.45; }}
+#quiz .quiz-bar .step.right {{ background: #3f9a5b; }}
+#quiz .quiz-bar .step.wrong {{ background: #d1574b; }}
+#quiz-question {{ font-size: 17px; line-height: 1.6; }}
+#quiz-question h2 {{ font-family: {SERIF}; font-size: 34px; font-weight: 500; margin: 8px 0 0; }}
+#quiz-choices .wrap {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }}
+#quiz-choices label {{ border: 1px solid var(--border-color-primary) !important; border-radius: 10px !important;
+  padding: 10px 14px !important; background: var(--background-fill-primary) !important; font-size: 15px; }}
+#quiz-choices label.selected {{ border-color: var(--color-accent) !important;
+  background: var(--color-accent-soft) !important; }}
+#quiz-typed textarea {{ font-size: 17px; }}
+#quiz-feedback {{ font-size: 15px; line-height: 1.6; }}
+#quiz-actions {{ gap: 8px; justify-content: flex-end; }}
+#quiz-actions button {{ flex: 0 0 auto; min-width: 120px; border-radius: 10px; }}
+
 #approval {{ gap: 8px; justify-content: center; }}
 #approval button {{ max-width: 160px; border-radius: 10px; }}
 #approval button.secondary {{ border: 1px solid var(--border-color-primary); }}
@@ -91,4 +125,15 @@ footer {{ display: none !important; }}
 .brand h2 {{ font-family: {SERIF}; font-weight: 500; margin: 4px 0 12px; }}
 #new-chat {{ justify-content: flex-start; font-weight: 500; border: none; box-shadow: none; }}
 .side-section {{ border: none !important; background: transparent !important; }}
+
+/* Saved chats: a plain list, one line each, the open one highlighted */
+#chats {{ border: none !important; background: transparent !important; padding: 0 !important; }}
+#chats .wrap {{ display: flex; flex-direction: column; gap: 2px; }}
+#chats label {{ width: 100%; border: none !important; background: transparent !important;
+  box-shadow: none !important; padding: 6px 8px; border-radius: 8px; overflow: hidden; }}
+#chats label span {{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+#chats label.selected {{ background: var(--block-background-fill) !important; }}
+#chats input[type=radio] {{ display: none; }}
+#delete-chat {{ align-self: flex-start; font-size: 12px; border: none; box-shadow: none;
+  color: var(--body-text-color-subdued); }}
 """

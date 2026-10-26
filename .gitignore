@@ -33,6 +33,7 @@ coverage/
 
 # Local databases and logs
 data/context.json
+data/chats/
 *.db
 *.sqlite
 *.sqlite3

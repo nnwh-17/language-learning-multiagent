@@ -1,4 +1,4 @@
-"""Shared test setup: no real LLM calls, a tiny JMdict database, a throwaway preferences file.
+"""Shared test setup: no real LLM calls, a tiny JMdict database, throwaway preferences and chats.
 
 Every test runs offline. Agents are driven by PydanticAI's `TestModel` / `FunctionModel`
 through `agent.override(model=...)`, so tests are fast, free and deterministic.
@@ -12,7 +12,7 @@ os.environ.update(JPLEARN_PROVIDER="litellm", LITELLM_API_BASE="http://test.inva
 import pytest  # noqa: E402
 from pydantic_ai import models  # noqa: E402
 
-from jplearn import dictionary, user_context  # noqa: E402
+from jplearn import conversations, dictionary, user_context  # noqa: E402
 
 # Any agent a test forgets to override fails loudly instead of calling the real model.
 models.ALLOW_MODEL_REQUESTS = False
@@ -60,6 +60,14 @@ def preferences_file(tmp_path, monkeypatch):
     """Keep saved preferences in a temporary file, so tests never read or change the real one."""
     path = tmp_path / "context.json"
     monkeypatch.setattr(user_context, "CONTEXT_FILE", path)
+    return path
+
+
+@pytest.fixture(autouse=True)
+def chats_dir(tmp_path, monkeypatch):
+    """Save chats to a temporary folder, so tests never see or change real saved chats."""
+    path = tmp_path / "chats"
+    monkeypatch.setattr(conversations, "CHATS_DIR", path)
     return path
 
 

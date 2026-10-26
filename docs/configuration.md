@@ -59,6 +59,7 @@ SDK.
 |---|---|---|
 | `data/jmdict.sqlite` | JMdict dictionary, built by `scripts/setup_dictionary.py` (~170 MB) | No |
 | `data/context.json` | The learner's saved preferences, edited in the web UI | No |
+| `data/chats/*.json` | Saved web chats, one file each; delete a file to delete the chat | No |
 | `anki-mcp.log` | Output of the Anki MCP server, kept out of the chat | No |
 | `.env` | Your settings and keys | No |
 

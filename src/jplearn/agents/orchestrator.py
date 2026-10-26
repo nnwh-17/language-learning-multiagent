@@ -7,7 +7,7 @@ research agents, while write operations pause for explicit user approval.
 from collections.abc import Callable
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, DeferredToolRequests, PartDeltaEvent, PartStartEvent, RunContext
+from pydantic_ai import Agent, DeferredToolRequests, PartDeltaEvent, PartStartEvent, RunContext, ToolReturn
 from pydantic_ai.agent import EventStreamHandler
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 from pydantic_core import from_json
@@ -24,6 +24,7 @@ from jplearn.agents.flashcards import (
     add_examples,
     flashcard_agent,
 )
+from jplearn.agents.quiz import quiz_agent
 from jplearn.agents.researcher import Material, researcher
 from jplearn.config import DEFAULT_DECK, get_model
 from jplearn.dictionary import DictEntry, lookup
@@ -76,6 +77,13 @@ Specialists (tools):
   pages, ...) and returns a passage plus its URL. Use it when the user asks you to find
   something to read. Always give the user the URL. If they then want a breakdown or
   flashcards, pass the returned passage to `analyze_japanese` / `draft_flashcards`.
+- `start_quiz`: makes an interactive quiz (multiple choice, readings, fill in the blank)
+  that the user answers in a quiz panel below the chat, which marks each answer. Use it
+  whenever the user wants to be quizzed or tested, rather than asking questions in chat.
+  Don't repeat the questions or answers in your reply; just say the quiz is ready below.
+  When a message starting with "[quiz ... finished]" arrives, it holds their results:
+  acknowledge the score briefly, explain each mistake in a line or two, and suggest what to
+  practise next (offer flashcards for the words they missed).
 
 For anything no specialist covers yet, answer directly.
 When you write Japanese, add furigana for kanji the first time it appears, e.g. 食(た)べる.
@@ -142,6 +150,21 @@ async def find_material(ctx: RunContext, request: str) -> Material:
     e.g. 'easy news article about cooking' or 'lyrics of 夜に駆ける by YOASOBI'."""
     result = await researcher.run(request, usage=ctx.usage)
     return result.output
+
+
+@orchestrator.tool
+async def start_quiz(ctx: RunContext, request: str) -> ToolReturn:
+    """Start an interactive quiz in the quiz panel. `request` describes the topic and any
+    wishes, e.g. '5 questions on N5 verbs', 'は vs が', or 'the words from this chat'."""
+    result = await quiz_agent.run(request, usage=ctx.usage)
+    quiz = result.output
+    # The quiz itself goes to the UI as metadata; the model only learns that it's showing,
+    # so it can't give the answers away in its reply.
+    return ToolReturn(
+        return_value=f"The quiz '{quiz.title}' ({len(quiz.questions)} questions) is now showing "
+        "in the quiz panel. The user's results will arrive as a message when they finish.",
+        metadata=quiz,
+    )
 
 
 @orchestrator.tool_plain(requires_approval=True)
