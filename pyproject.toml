@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Multi-agent Japanese learning assistant (PydanticAI + Anki MCP)"
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic-ai-slim[openai,mcp,duckduckgo,web-fetch]",
+    "pydantic-ai-slim[openai,anthropic,mcp,duckduckgo,web-fetch]",
+    # pydantic-ai 2.58 is built against the 1.x SDK; 2.x changed its message param types
+    "anthropic>=1.12.1,<2",
     "python-dotenv",
     "gradio",
     "sudachipy",

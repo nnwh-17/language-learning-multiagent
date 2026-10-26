@@ -78,6 +78,10 @@ footer {{ display: none !important; }}
 #chat .examples {{ grid-template-columns: repeat(2, 1fr) !important; max-width: 640px; margin: 0 auto; }}
 .hint, .hint * {{ text-align: center; font-size: 12px !important; color: var(--body-text-color-subdued) !important; }}
 
+/* Furigana above kanji */
+#chat ruby rt {{ font-size: 0.55em; color: var(--body-text-color-subdued); }}
+#chat .message {{ ruby-position: over; }}
+
 #approval {{ gap: 8px; justify-content: center; }}
 #approval button {{ max-width: 160px; border-radius: 10px; }}
 #approval button.secondary {{ border: 1px solid var(--border-color-primary); }}

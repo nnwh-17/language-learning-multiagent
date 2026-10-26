@@ -47,12 +47,19 @@ def _():
     from pydantic_ai.mcp import MCPToolset  # noqa: F401
 
 
-@check("LiteLLM settings in .env")
+@check("model settings in .env")
 def _():
+    from jplearn.config import MODEL_NAME, PROVIDER, get_model
+
+    get_model()  # raises on an unknown JPLEARN_PROVIDER
+    if PROVIDER == "anthropic":
+        if os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
+            return f"Claude API, {MODEL_NAME}"
+        return f"Claude API, {MODEL_NAME} (no ANTHROPIC_API_KEY; relying on an `ant auth login` profile)"
     missing = [k for k in ("LITELLM_API_BASE", "LITELLM_API_KEY") if not os.getenv(k)]
     if missing:
         raise RuntimeError(f"missing {', '.join(missing)} - copy .env.example to .env")
-    return os.getenv("LITELLM_API_BASE")
+    return f"LiteLLM at {os.getenv('LITELLM_API_BASE')}, {MODEL_NAME}"
 
 
 @check("sudachi tokenizer")

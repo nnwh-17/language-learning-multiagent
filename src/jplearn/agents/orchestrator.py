@@ -4,9 +4,13 @@ The chat frontends call this agent; it delegates to the analyzer, flashcard, exa
 research agents, while write operations pause for explicit user approval.
 """
 
+from collections.abc import Callable
+
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, DeferredToolRequests, RunContext
+from pydantic_ai import Agent, DeferredToolRequests, PartDeltaEvent, PartStartEvent, RunContext
+from pydantic_ai.agent import EventStreamHandler
 from pydantic_ai.messages import ModelMessage, ToolCallPart
+from pydantic_core import from_json
 
 from jplearn.activity import Observe, is_output_tool, track
 from jplearn.agents.analyzer import Breakdown, analyzer
@@ -40,7 +44,8 @@ speaker learning Japanese.
 For every message:
 1. Work out what the user wants (explain grammar, break down a sentence, quiz them,
    make flashcards, find material, casual practice, ...).
-2. Write a short plan of the steps you would take, naming the specialist you will use.
+2. Write a short plan of the steps you would take. The user sees it, so describe each step
+   in plain words ("Look up 鳴る in the dictionary"), not tool names.
 3. Carry out the plan and answer the user.
 
 Specialists (tools):
@@ -165,6 +170,42 @@ def tools_used(messages: list[ModelMessage]) -> list[str]:
         for p in m.parts
         if p.part_kind == "tool-call" and not is_output_tool(p.tool_name)
     ]
+
+
+def stream_reply(on_reply: Callable[[str], None]) -> EventStreamHandler:
+    """Event handler for `orchestrator.run(event_stream_handler=...)` that calls `on_reply`
+    with the reply written so far, each time the model adds to it.
+
+    The reply is structured output ({"plan": [...], "reply": "..."}), so it streams as JSON
+    fragments: the output tool's arguments through LiteLLM, or the response text itself on
+    the Claude API (native structured output). Partial parsing picks out the reply.
+    """
+
+    async def handle(ctx: RunContext, events) -> None:
+        parts = {}  # part index -> the part so far, within the current model response
+        async for event in events:
+            if isinstance(event, PartStartEvent):
+                parts[event.index] = event.part
+            elif isinstance(event, PartDeltaEvent) and event.index in parts:
+                parts[event.index] = event.delta.apply(parts[event.index])
+            else:
+                continue
+            part = parts[event.index]
+            if part.part_kind == "text":
+                output = part.content
+            elif part.part_kind == "tool-call" and is_output_tool(part.tool_name):
+                output = part.args
+            else:
+                continue
+            try:
+                if not isinstance(output, dict):
+                    output = from_json(output or "{}", allow_partial="trailing-strings")
+            except ValueError:  # not JSON (e.g. a remark before a tool call), or cut off mid-token
+                continue
+            if isinstance(output, dict) and isinstance(reply := output.get("reply"), str):
+                on_reply(reply)
+
+    return handle
 
 
 def describe_approval(call: ToolCallPart) -> str:

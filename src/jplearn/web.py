@@ -4,6 +4,7 @@ This frontend manages per-tab conversation and approval state, streams activity 
 and provides controls for viewing the agent graph and editing saved learner context.
 """
 
+import re
 import time
 
 import gradio as gr
@@ -12,8 +13,8 @@ from pydantic_ai.messages import ModelMessage
 
 from jplearn import user_context
 from jplearn.activity import Activity, LogEntry
-from jplearn.agents.orchestrator import describe_approval, orchestrator, tools_used
-from jplearn.architecture import Status, approval_targets, render_html
+from jplearn.agents.orchestrator import describe_approval, orchestrator, stream_reply, tools_used
+from jplearn.architecture import Status, all_nodes, approval_targets, render_html
 from jplearn.log_view import render_log
 from jplearn.theme import CSS, THEME
 from jplearn.user_context import AGENTS, ALL, ContextItem
@@ -21,44 +22,112 @@ from jplearn.user_context import AGENTS, ALL, ContextItem
 NEW_ITEM = "➕ New item"
 
 
-async def run_orchestrator(chat: list[dict], **run_kwargs):
-    """Run the orchestrator and append its output to the chat.
+# What each orchestrator tool is called in the chat, e.g. analyze_japanese -> Analyzer
+STEP_LABELS = {tool: child.label for tool, child in all_nodes()["orchestrator"].calls}
+
+COMPOSER_HINTS = {
+    "idle": "Ask anything, or paste Japanese text...",
+    "busy": "Working on it...",
+    "approval": "Approve or reject above, or reply to change the request...",
+}
+
+# Kanji followed by a hiragana reading in brackets, e.g. 食(た)べる or 日本語（にほんご）
+FURIGANA = re.compile(r"([一-鿿々]+)[(（]([ぁ-ゖー]+)[)）]")
+
+
+def with_furigana(markdown: str) -> str:
+    """Show readings written as 漢字(かんじ) above the kanji instead of in brackets."""
+    return FURIGANA.sub(r"<ruby>\1<rp>(</rp><rt>\2</rt><rp>)</rp></ruby>", markdown)
+
+
+def steps_message(plan: list[str], tools: list[str], seconds: float) -> dict | None:
+    """One collapsed "How I answered" message with the plan and the specialists used."""
+    parts = []
+    if plan:
+        parts.append("\n".join(f"{i}. {step}" for i, step in enumerate(plan, 1)))
+    if tools:
+        used = dict.fromkeys(STEP_LABELS.get(tool, tool) for tool in tools)  # dedupe, keep order
+        parts.append("**Used:** " + " → ".join(used))
+    if not parts:
+        return None
+    return {
+        "role": "assistant",
+        "content": "\n\n".join(parts),
+        "metadata": {"title": "How I answered", "status": "done", "duration": round(seconds, 1)},
+    }
+
+
+def progress_message(status: dict[str, Status]) -> dict:
+    """Temporary message with a spinner naming what is running right now."""
+    nodes = all_nodes()
+    running = [nodes[n].label for n, s in status.items() if s == "running" and n != "orchestrator"]
+    return {
+        "role": "assistant",
+        "content": "Open **Agents** on the right for every step.",
+        "metadata": {
+            "title": "Working: " + " · ".join(running) if running else "Thinking...",
+            "status": "pending",
+        },
+    }
+
+
+class LiveReply:
+    """The reply so far while the orchestrator streams it, shown below the progress message."""
+
+    MIN_INTERVAL = 0.05  # seconds between UI refreshes, so fast streams don't flood the browser
+
+    def __init__(self, activity: Activity) -> None:
+        self.text = ""
+        self._activity = activity
+        self._last_refresh = 0.0
+
+    def update(self, text: str) -> None:
+        self.text = text
+        if time.time() - self._last_refresh >= self.MIN_INTERVAL:
+            self._last_refresh = time.time()
+            self._activity.notify()
+
+    def message(self) -> list[dict]:
+        return [{"role": "assistant", "content": with_furigana(self.text)}] if self.text else []
+
+
+async def run_orchestrator(chat: list[dict], live: LiveReply, **run_kwargs):
+    """Run the orchestrator, streaming its reply into `live`, and append its output to the chat.
 
     Returns (chat, history, pending) where pending holds tool calls awaiting approval.
     """
-    result = await orchestrator.run(**run_kwargs)
-    if tools := tools_used(result.new_messages()):
-        chat.append(
-            {"role": "assistant", "content": "\n".join(tools), "metadata": {"title": "Tools used"}}
-        )
-
+    started = time.time()
+    result = await orchestrator.run(**run_kwargs, event_stream_handler=stream_reply(live.update))
     out = result.output
+    plan = [] if isinstance(out, DeferredToolRequests) else out.plan
+    if steps := steps_message(plan, tools_used(result.new_messages()), time.time() - started):
+        chat.append(steps)
+
     if isinstance(out, DeferredToolRequests):
         for call in out.approvals:
             chat.append({"role": "assistant", "content": "**Approval needed**\n\n" + describe_approval(call)})
         return chat, result.all_messages(), out
 
-    if out.plan:
-        plan = "\n".join(f"{i}. {step}" for i, step in enumerate(out.plan, 1))
-        chat.append({"role": "assistant", "content": plan, "metadata": {"title": "Plan"}})
-    chat.append({"role": "assistant", "content": out.reply})
+    chat.append({"role": "assistant", "content": with_furigana(out.reply)})
     return chat, result.all_messages(), None
 
 
 async def run_turn(chat: list[dict], history: list[ModelMessage], log: list[LogEntry], **run_kwargs):
-    """Run the orchestrator, yielding (chat, history, pending, status, log) each time
-    something starts or finishes, so the architecture panel and the log stay live."""
-    # Activity.watch streams intermediate status snapshots to keep the UI responsive.
+    """Run the orchestrator, yielding (chat, history, pending, status, log, busy) each time
+    something starts or finishes, so the progress message, the architecture panel and the
+    log stay live."""
     activity = Activity(log)
+    live = LiveReply(activity)
     try:
-        async for status in activity.watch(run_orchestrator(chat, **run_kwargs)):
-            yield chat, history, None, status, log
+        async for status in activity.watch(run_orchestrator(chat, live, **run_kwargs)):
+            yield chat + [progress_message(status)] + live.message(), history, None, status, log, True
     except Exception as e:
         # Show the failure instead of crashing the page; the failed steps are marked in the log
         error = f"{type(e).__name__}: {e}"
         log.append(LogEntry(time.time(), 0, "error", "Turn failed", error))
-        chat.append({"role": "assistant", "content": f"⚠️ Something went wrong:\n\n`{error}`"})
-        yield chat, history, None, activity.status(), log
+        chat.append({"role": "assistant", "content": "⚠️ Sorry, something went wrong and I couldn't finish that. Please try again."})
+        chat.append({"role": "assistant", "content": f"`{error}`", "metadata": {"title": "Error details"}})
+        yield chat, history, None, activity.status(), log, False
         return
 
     chat, history, pending = activity.result
@@ -67,7 +136,7 @@ async def run_turn(chat: list[dict], history: list[ModelMessage], log: list[LogE
         for call in pending.approvals:
             status |= {node_id: "waiting" for node_id in approval_targets(call.tool_name)}
             log.append(LogEntry(time.time(), 0, "info", f"Waiting for your approval: {call.tool_name}"))
-    yield chat, history, pending, status, log
+    yield chat, history, pending, status, log, False
 
 
 def architecture_html(status: dict[str, Status], graph: bool) -> str:
@@ -78,20 +147,24 @@ def user_entry(text: str, detail: str = "") -> LogEntry:
     return LogEntry(time.time(), 0, "user", text, detail)
 
 
-def outputs(chat, history, pending, status, log, graph):
-    """Values for [chatbot, history, pending, status, log, architecture, log_view,
-    approve_btn, reject_btn]."""
-    show = pending is not None
+def outputs(chat, history, pending, status, log, busy, graph, clear_box=False):
+    """Values for [box, chatbot, history, pending, status, log, architecture, log_view,
+    approve_btn, reject_btn]. The composer is locked while a turn is running."""
+    waiting = pending is not None
+    hint = "busy" if busy else "approval" if waiting else "idle"
+    box = gr.Textbox(
+        interactive=not busy, placeholder=COMPOSER_HINTS[hint], **({"value": ""} if clear_box else {})
+    )
     return (
-        chat, history, pending, status, log, architecture_html(status, graph), render_log(log),
-        gr.Button(visible=show), gr.Button(visible=show),
+        box, chat, history, pending, status, log, architecture_html(status, graph), render_log(log),
+        gr.Button(visible=waiting), gr.Button(visible=waiting),
     )
 
 
 async def respond(message: str, chat, history, pending, status, log, graph: bool):
     message = message.strip()
     if not message:
-        yield "", *outputs(chat, history, pending, status, log, graph)
+        yield outputs(chat, history, pending, status, log, False, graph)
         return
 
     # Show the user's message straight away while the agent works
@@ -106,7 +179,7 @@ async def respond(message: str, chat, history, pending, status, log, graph: bool
         )
         turn = run_turn(chat, history, log, message_history=history, deferred_tool_results=results)
     async for update in turn:
-        yield "", *outputs(*update, graph)
+        yield outputs(*update, graph, clear_box=True)
 
 
 async def decide(approved: bool, chat, history, pending, log, graph: bool):
@@ -166,12 +239,13 @@ def toggle_context(names: list[str]):
 
 PLACEHOLDER = """## How can I help you study today?
 
-Ask about grammar or vocabulary, paste Japanese text to break down, or make Anki cards."""
+Ask why something works the way it does, paste Japanese text to break down, find
+something to read, or make Anki cards."""
 
 EXAMPLES = [
     {"text": "Break down: 昨日、友達と一緒に新しいレストランに行きました。"},
     {"text": "What's the difference between は and が?"},
-    {"text": "Give me example sentences using 〜てしまう"},
+    {"text": "Find me an easy news article to read"},
     {"text": "Make Anki flashcards for 勉強, 練習 and 復習"},
 ]
 
@@ -235,7 +309,7 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
             reject_btn = gr.Button("Reject", variant="secondary", visible=False)
         box = gr.Textbox(
             elem_id="composer",
-            placeholder="Ask anything, or paste Japanese text...",
+            placeholder=COMPOSER_HINTS["idle"],
             show_label=False,
             container=False,
             lines=1,
@@ -246,12 +320,12 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
         gr.Markdown("Open **Agents** on the right to watch each step.", elem_classes="hint")
 
     state = [chatbot, history, pending, status, log]
-    out = [*state, architecture, log_view, approve_btn, reject_btn]
-    box.submit(respond, [box, *state, graph_view], [box, *out])
-    chatbot.example_select(pick_example, None, box).then(respond, [box, *state, graph_view], [box, *out])
+    out = [box, *state, architecture, log_view, approve_btn, reject_btn]
+    box.submit(respond, [box, *state, graph_view], out)
+    chatbot.example_select(pick_example, None, box).then(respond, [box, *state, graph_view], out)
     approve_btn.click(approve, [*state, graph_view], out)
     reject_btn.click(reject, [*state, graph_view], out)
-    clear.click(lambda graph: outputs([], [], None, {}, [], graph), graph_view, out)
+    clear.click(lambda graph: outputs([], [], None, {}, [], False, graph, clear_box=True), graph_view, out)
     graph_view.change(architecture_html, [status, graph_view], architecture)
 
     # Only one sidebar open at a time: opening either one closes the other

@@ -1,15 +1,39 @@
 # jplearn
 
+A multi-agent Japanese tutor for English speakers. You chat with one agent, which plans each
+request and hands parts of it to specialists: sentence breakdowns, explanations with
+analogies, example sentences, reading material from the web, and Anki flashcards. Japanese
+facts come from a tokenizer (SudachiPy) and a local dictionary (JMdict) rather than the
+model's memory, and nothing is written to Anki until you approve it.
+
+## Documentation
+
+- [Architecture](docs/architecture.md): how a message flows through the agents, approvals,
+  live activity and streaming
+- [Agents](docs/agents.md): what each agent does, and how to add one
+- [Configuration](docs/configuration.md): every `.env` setting, LiteLLM vs the Claude API
+- [Development](docs/development.md): smoke tests, troubleshooting, code conventions
+
 ## Setup
 
-Requires Python 3.12+ and access to a LiteLLM proxy.
+Requires Python 3.12+ and either access to a LiteLLM proxy or a Claude API key.
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
-copy .env.example .env   # then fill in the LITELLM_* values
+copy .env.example .env   # then fill in the settings for your provider
 ```
+
+Choose the LLM provider in `.env`:
+
+- **LiteLLM proxy** (default): `JPLEARN_PROVIDER=litellm` plus `LITELLM_API_BASE` and `LITELLM_API_KEY`.
+- **Claude API**: `JPLEARN_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY` (or run `ant auth login`
+  instead of setting a key). Optionally set `JPLEARN_EFFORT` (`low` to `max`) to trade answer
+  depth for speed and cost.
+
+`JPLEARN_MODEL` is the model for either provider, e.g. `claude-sonnet-5-5` or `claude-opus-5-5`.
+All settings are listed in [docs/configuration.md](docs/configuration.md).
 
 ### Dictionary
 
@@ -26,7 +50,7 @@ python scripts/setup_dictionary.py   # downloads JMdict, builds data/jmdict.sqli
 ## Check everything works
 
 ```powershell
-python scripts/healthcheck.py          # imports, API key, tokenizer
+python scripts/healthcheck.py          # imports, model settings, tokenizer
 python scripts/healthcheck.py --live   # also makes one real LLM call
 python scripts/test_analyzer.py        # tokenizer, analyzer agent, orchestrator -> analyzer
 python scripts/test_anki_mcp.py        # Anki MCP server, read-only
@@ -65,15 +89,4 @@ src/jplearn/
   chat.py            terminal UI
 ```
 
-Anything that writes to Anki is an orchestrator tool with `requires_approval=True`, so both
-UIs pause and ask the user first.
-
-### Adding an agent
-
-1. Create `agents/<name>.py` with an `Agent(get_model(), ..., capabilities=[Observe("<id>")])`
-   and call `use_user_context(agent, "<id>")`.
-2. Give the orchestrator a tool that runs it, and describe that tool in the orchestrator's
-   `INSTRUCTIONS`.
-3. Add a `Node("<id>", ...)` to `architecture.py` with the same tool names as edges, and to
-   `check_against_agents`. The preferences dropdown picks up new agents from there.
-4. Run `python scripts/healthcheck.py`. It fails if the diagram and the agents' tools disagree.
+To add an agent, follow [Adding an agent](docs/agents.md#adding-an-agent).

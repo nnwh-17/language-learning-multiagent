@@ -108,6 +108,10 @@ class Activity:
             if not self._running[node_id]:
                 self._done.add(node_id)
 
+    def notify(self) -> None:
+        """Make `watch()` yield again, e.g. because more of the reply has streamed in."""
+        self._post(lambda: None)
+
     def add(self, kind: EntryKind, text: str, detail: str = "") -> LogEntry:
         parent = _parent.get()
         depth = 0 if parent is None else parent.depth + 1
