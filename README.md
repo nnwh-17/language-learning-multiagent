@@ -50,6 +50,7 @@ python scripts/setup_dictionary.py   # downloads JMdict, builds data/jmdict.sqli
 ## Check everything works
 
 ```powershell
+pip install -e ".[dev]"; pytest       # offline tests, ~15 s (see docs/development.md)
 python scripts/healthcheck.py          # imports, model settings, tokenizer
 python scripts/healthcheck.py --live   # also makes one real LLM call
 python scripts/test_analyzer.py        # tokenizer, analyzer agent, orchestrator -> analyzer

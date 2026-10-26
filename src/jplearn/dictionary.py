@@ -1,12 +1,13 @@
-"""Look up words in the local JMdict SQLite database.
+"""Build and look up the local JMdict SQLite database.
 
-``setup_dictionary.py`` downloads and builds the database consumed here; the analyzer and
-example generator use ``lookup`` to ground meanings in dictionary entries.
+``scripts/setup_dictionary.py`` downloads JMdict and calls ``build_database``; the agents use
+``lookup`` to ground meanings in dictionary entries.
 """
 
 import json
 import sqlite3
 from functools import cache
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -27,6 +28,40 @@ class DictEntry(BaseModel):
     readings: list[str]
     common: bool
     senses: list[Sense]
+
+
+def build_database(jmdict: dict, path: Path = DB_PATH) -> None:
+    """Write a jmdict-simplified JSON export to `path` as an indexed SQLite database.
+
+    Builds a temporary file first, so an interrupted build never replaces a working database.
+    """
+    path.parent.mkdir(exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.unlink(missing_ok=True)
+    db = sqlite3.connect(tmp)
+    # Store entries as source JSON and index every kanji/kana form for exact lookup.
+    db.executescript("""
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE entries (id INTEGER PRIMARY KEY, common INTEGER, data TEXT);
+        CREATE TABLE forms (text TEXT, entry_id INTEGER);
+        CREATE INDEX forms_text ON forms (text);
+    """)
+    db.execute("INSERT INTO meta VALUES ('version', ?)", (jmdict["dictDate"],))
+    db.execute("INSERT INTO meta VALUES ('tags', ?)", (json.dumps(jmdict["tags"], ensure_ascii=False),))
+    for word in jmdict["words"]:
+        forms = word["kanji"] + word["kana"]
+        common = any(f["common"] for f in forms)
+        db.execute(
+            "INSERT INTO entries VALUES (?, ?, ?)",
+            (int(word["id"]), common, json.dumps(word, ensure_ascii=False)),
+        )
+        db.executemany(
+            "INSERT INTO forms VALUES (?, ?)", [(f["text"], int(word["id"])) for f in forms]
+        )
+    db.commit()
+    db.close()
+    path.unlink(missing_ok=True)
+    tmp.rename(path)
 
 
 @cache

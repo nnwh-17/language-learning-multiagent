@@ -1,9 +1,45 @@
 # Development
 
-How to check changes and what to do when something breaks. There is no unit-test suite; the
-scripts below are smoke tests against the real tokenizer, dictionary, model and Anki.
+How to check changes and what to do when something breaks.
 
-## Checks
+## Tests
+
+```powershell
+pip install -e ".[dev]"   # once, adds pytest
+pytest                    # ~15 s, offline and free
+```
+
+The tests in [tests/](../tests/) never call a real model, Anki or the web, so they run the
+same on any machine and in CI (GitHub Actions runs them on every push and pull request):
+
+- **No LLM:** [conftest.py](../tests/conftest.py) sets `ALLOW_MODEL_REQUESTS = False`, so an
+  agent a test forgets to replace fails instead of spending money. Tests replace agents'
+  models with `agent.override(model=...)`.
+- **Scripted models:** [scripted.py](../tests/scripted.py) builds fake models that do exactly
+  what a test says, step by step: `call(tool, args)`, `answer(plan, reply)`, or the streamed
+  versions for the web UI. PydanticAI's `TestModel` fills in generated values when the exact
+  output doesn't matter.
+- **Tiny dictionary:** a four-word JMdict database is built with `build_database()` for the
+  test session, instead of the 170 MB real one.
+- **Throwaway preferences:** each test gets its own empty `context.json`.
+- **Fake Anki:** `FakeAnki` in [test_agents.py](../tests/test_agents.py) answers the few MCP
+  calls `flashcards.py` makes.
+
+| File | Covers |
+|---|---|
+| `test_language_tools.py` | Tokenizer, dictionary lookups (incl. する verbs), the example-sentence check |
+| `test_app_state.py` | Saved preferences, activity tracking, the agents diagram matches the code |
+| `test_agents.py` | Routing to specialists, user context in instructions, approve/reject, Anki write helpers |
+| `test_web.py` | A full web turn: streaming, locked composer, replying instead of approving, errors, furigana |
+
+When you add a feature, add a test next to the closest existing one. For a new agent, copy
+`test_orchestrator_delegates_to_explainer_with_users_context`.
+
+## Smoke tests
+
+The scripts below check the real tokenizer, dictionary, model and Anki together. Run them
+before a release, or after changing prompts or provider settings; they are slower and the
+ones that call the model cost a little.
 
 | Command | Needs | What it checks |
 |---|---|---|
@@ -22,8 +58,10 @@ Add `-v` to the health check to print full tracebacks.
 
 ## After changing…
 
+- **Anything:** `pytest`.
 - **An agent's tools, or adding an agent:** update [architecture.py](../src/jplearn/architecture.py)
-  to match, then run the health check (see [agents.md](agents.md#adding-an-agent)).
+  to match; `pytest` and the health check both fail until they agree (see
+  [agents.md](agents.md#adding-an-agent)).
 - **Prompts or output models:** run the matching smoke test, or try a few messages in the
   web UI with the **Agents** panel open to watch which tools are called.
 - **Anything about approvals or Anki writes:** run `test_flashcards.py` in both modes.
