@@ -9,19 +9,16 @@ Requires Anki desktop with the AnkiConnect add-on (code 2055492159) and Node.js.
 
 import os
 import shutil
-from pathlib import Path
 
-from dotenv import load_dotenv
 from fastmcp.client.transports import StdioTransport
 from pydantic_ai.mcp import MCPToolset, ProcessToolCallback
+from pydantic_ai.toolsets import FilteredToolset
 
-load_dotenv()
+from jplearn.config import ANKI_CONNECT_URL, PROJECT_ROOT
 
-# Connection settings and the log destination for the MCP child process.
 ANKI_MCP_PACKAGE = "@ankimcp/anki-mcp-server@0.27.0"
-ANKI_CONNECT_URL = os.getenv("ANKI_CONNECT_URL", "http://localhost:8765")
 # Keep verbose server output out of the chat.
-LOG_FILE = Path(__file__).resolve().parents[2] / "anki-mcp.log"
+LOG_FILE = PROJECT_ROOT / "anki-mcp.log"
 
 # Restrict the Anki API surface to the deck and note operations used by this app.
 FLASHCARD_TOOLS = {
@@ -64,7 +61,8 @@ def flashcard_toolset(
     read_only: bool = False,
     tools: set[str] = FLASHCARD_TOOLS,
     process_tool_call: ProcessToolCallback | None = None,
-):
+) -> FilteredToolset:
     """Build an Anki toolset exposing only the selected deck/note operations."""
-    # Filter the full server API so agents see only tools relevant to flashcards.
-    return anki_toolset(read_only, process_tool_call).filtered(lambda ctx, tool_def: tool_def.name in tools)
+    return anki_toolset(read_only, process_tool_call).filtered(
+        lambda ctx, tool_def: tool_def.name in tools
+    )

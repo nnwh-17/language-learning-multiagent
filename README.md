@@ -41,3 +41,38 @@ python scripts/test_flashcards.py --write   # approve, check cards in Anki, dele
 python -m jplearn.web    # web chat at http://127.0.0.1:7860
 python -m jplearn.chat   # terminal chat
 ```
+
+## Project layout
+
+```
+src/jplearn/
+  config.py          settings from .env, file paths, the shared LLM model
+  agents/
+    orchestrator.py  the agent you chat with; plans and delegates to the others
+    analyzer.py      word-by-word breakdown (tokenizer + JMdict)
+    flashcards.py    drafts Anki cards; also the Anki write helpers
+    examples.py      example sentences, checked to contain each word
+    researcher.py    finds Japanese reading material on the web
+  tokenizer.py       SudachiPy wrapper (readings, dictionary forms, POS)
+  dictionary.py      JMdict lookups from data/jmdict.sqlite
+  anki.py            Anki MCP server toolsets
+  user_context.py    saved learner preferences (data/context.json) added to agent instructions
+  architecture.py    the agent/tool diagram in the web UI's side panel
+  activity.py        live activity tracking for that panel and the log
+  log_view.py        renders the activity log
+  web.py, theme.py   Gradio web UI and its styling
+  chat.py            terminal UI
+```
+
+Anything that writes to Anki is an orchestrator tool with `requires_approval=True`, so both
+UIs pause and ask the user first.
+
+### Adding an agent
+
+1. Create `agents/<name>.py` with an `Agent(get_model(), ..., capabilities=[Observe("<id>")])`
+   and call `use_user_context(agent, "<id>")`.
+2. Give the orchestrator a tool that runs it, and describe that tool in the orchestrator's
+   `INSTRUCTIONS`.
+3. Add a `Node("<id>", ...)` to `architecture.py` with the same tool names as edges, and to
+   `check_against_agents`. The preferences dropdown picks up new agents from there.
+4. Run `python scripts/healthcheck.py`. It fails if the diagram and the agents' tools disagree.

@@ -3,7 +3,7 @@
 Two ways things get recorded:
 - Every agent has the `Observe` capability, a PydanticAI hook that logs its run, each LLM
   call and each tool call, and marks the agent as running in the architecture panel.
-- Resources (tokenizer, dictionary, Anki MCP) mark themselves with `with track("jmdict"): ...`.
+- Tool and MCP nodes (tokenizer, dictionary, Anki MCP) mark themselves with `with track("jmdict"): ...`.
 
 Entries nest: anything that happens inside an agent run or tool call is logged one level
 deeper. The web UI runs the orchestrator through `Activity.watch()` and re-renders on every
@@ -64,6 +64,11 @@ def tree_order(entries: list[LogEntry]) -> list[LogEntry]:
 
     visit(None)
     return ordered
+
+
+def is_output_tool(tool_name: str) -> bool:
+    """Whether a tool call is PydanticAI returning structured output, not a real tool."""
+    return tool_name.startswith("final_result")
 
 
 def _short(value: Any, limit: int = 70) -> str:
@@ -161,7 +166,8 @@ def span(kind: EntryKind, text: str, node_ids: Iterable[str] = ()):
 
 @contextmanager
 def track(node_id: str):
-    """Mark a resource from jplearn.architecture (e.g. "jmdict") as in use inside this block."""
+    """Mark a tool or MCP node from jplearn.architecture (e.g. "jmdict") as in use inside
+    this block. It is logged as a "resource" entry, to tell it apart from an agent's tool call."""
     with span("resource", all_nodes()[node_id].label, [node_id]):
         yield
 
@@ -198,7 +204,7 @@ class Observe(AbstractCapability[Any]):
             if entry:
                 usage = response.usage
                 calls = [
-                    "answer" if p.tool_name.startswith("final_result") else p.tool_name
+                    "answer" if is_output_tool(p.tool_name) else p.tool_name
                     for p in response.parts
                     if p.part_kind == "tool-call"
                 ]
@@ -207,7 +213,7 @@ class Observe(AbstractCapability[Any]):
             return response
 
     async def wrap_tool_execute(self, ctx: RunContext, *, call, tool_def, args, handler):
-        if call.tool_name.startswith("final_result"):  # structured output, not a real tool
+        if is_output_tool(call.tool_name):
             return await handler(args)
         with span("tool", call.tool_name) as entry:
             if entry:

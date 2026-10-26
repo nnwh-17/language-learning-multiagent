@@ -14,6 +14,9 @@ from pydantic_ai import DeferredToolRequests
 from jplearn.agents.orchestrator import describe_approval, orchestrator, tools_used
 from jplearn.anki import anki_toolset
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 DECK = "jplearn-test"
 TEXT = "ベルが鳴ったら、静かにしなければならない。"
 

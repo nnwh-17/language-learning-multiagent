@@ -8,11 +8,10 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 
-from jplearn.activity import Observe, track
+from jplearn.activity import Observe, is_output_tool, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.agents.examples import ExampleSet, examples_agent
 from jplearn.agents.flashcards import (
-    DEFAULT_DECK,
     Card,
     CardDraft,
     Sentence,
@@ -21,7 +20,7 @@ from jplearn.agents.flashcards import (
     flashcard_agent,
 )
 from jplearn.agents.researcher import Material, researcher
-from jplearn.config import get_model
+from jplearn.config import DEFAULT_DECK, get_model
 from jplearn.dictionary import DictEntry, lookup
 from jplearn.user_context import use_user_context
 
@@ -145,12 +144,11 @@ async def add_flashcards(deck: str, cards: list[Card]) -> dict:
 
 def tools_used(messages: list[ModelMessage]) -> list[str]:
     """Names of the tools the orchestrator called, in order (excluding its final answer)."""
-    # Tool-call messages include structured final-result markers, which are not user tools.
     return [
         p.tool_name
         for m in messages
         for p in m.parts
-        if p.part_kind == "tool-call" and not p.tool_name.startswith("final_result")
+        if p.part_kind == "tool-call" and not is_output_tool(p.tool_name)
     ]
 
 

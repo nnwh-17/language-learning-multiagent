@@ -1,4 +1,4 @@
-"""Model and render the agent/resource graph shown in the web UI.
+"""Model and render the agent/tool graph shown in the web UI.
 
 The diagram is a tree: each node is an agent, a tool (tokenizer, dictionary, web), an MCP server
 or the user, and each edge is the tool one node uses to call the next. Every node has a
@@ -113,7 +113,6 @@ def check_against_agents() -> list[str]:
     from jplearn.agents.researcher import researcher as researcher_agent
     from jplearn.anki import FLASHCARD_TOOLS
 
-    # Compare function tools only; MCP toolsets reveal their tool names after connecting.
     problems = []
     for node, agent in [
         (orchestrator, orchestrator_agent),
@@ -275,7 +274,7 @@ def render_graph(status: dict[str, Status]) -> str:
         by_child: dict[str, list[str]] = {}
         for tool, child in parent.calls:
             by_child.setdefault(child.id, []).append(tool)
-        labelled = set()  # one tool can reach several resources; label it once
+        labelled = set()  # one tool can reach several nodes; label it once
         for child_id, tools in by_child.items():
             cx, cy = pos[child_id]
             to = f"to-{nodes[child_id].kind}"  # arrows take the colour of what they point at

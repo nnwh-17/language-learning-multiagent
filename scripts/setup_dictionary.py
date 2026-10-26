@@ -7,10 +7,14 @@ once during setup or again to refresh the source data.
 import io
 import json
 import sqlite3
+import sys
 import urllib.request
 import zipfile
 
 from jplearn.dictionary import DB_PATH
+
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
 
 RELEASES = "https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest"
 

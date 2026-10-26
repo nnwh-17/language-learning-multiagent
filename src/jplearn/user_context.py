@@ -6,22 +6,21 @@ without restarting the app.
 """
 
 import json
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
-CONTEXT_FILE = Path(__file__).resolve().parents[2] / "data" / "context.json"
+from jplearn.architecture import all_nodes
+from jplearn.config import DATA_DIR
+
+CONTEXT_FILE = DATA_DIR / "context.json"
 ALL = "all"
 
-# Agents context can be scoped to: node id -> label (ids match jplearn.architecture)
+# Agents context can be scoped to: node id -> label. Taken from the architecture diagram,
+# so a new agent added there shows up here too.
 AGENTS = {
     ALL: "All agents",
-    "orchestrator": "Orchestrator (replies to you)",
-    "analyzer": "Analyzer",
-    "flashcards": "Flashcard agent",
-    "researcher": "Researcher",
-    "examples": "Example sentences",
+    **{node.id: node.label for node in all_nodes().values() if node.kind == "agent"},
 }
 
 

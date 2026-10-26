@@ -12,6 +12,9 @@ import sys
 
 from jplearn.anki import FLASHCARD_TOOLS, LOG_FILE, anki_toolset, flashcard_toolset
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 TEST_DECK = "jplearn-test"
 
 

@@ -64,11 +64,7 @@ use_user_context(examples_agent, "examples")
 def lookup_word(word: str, reading: str | None = None) -> list[DictEntry]:
     """Look up a Japanese word in JMdict. `reading` (hiragana) optionally narrows homographs."""
     with track("jmdict"):
-        entries = lookup(word, reading)
-        if not entries and word.endswith("する"):
-            # JMdict lists 勉強する under the noun 勉強 (marked "suru verb")
-            entries = lookup(word[:-2], reading[:-2] if reading and reading.endswith("する") else None)
-        return entries
+        return lookup(word, reading)
 
 
 def uses_word(sentence: str, word: str) -> bool:

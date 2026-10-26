@@ -54,7 +54,7 @@ class Token(BaseModel):
 @cache
 def _dictionary() -> Dictionary:
     # Loading Sudachi's system dictionary is expensive, so share it process-wide.
-    return Dictionary()  # slow to load, so shared
+    return Dictionary()
 
 
 _local = threading.local()
@@ -69,6 +69,7 @@ def _tokenizer():
 
 
 def to_hiragana(katakana: str) -> str:
+    """Convert katakana characters to hiragana, leaving everything else unchanged."""
     return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in katakana)
 
 

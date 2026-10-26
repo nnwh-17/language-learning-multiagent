@@ -11,6 +11,9 @@ import traceback
 
 from dotenv import load_dotenv
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 # Read the same local environment configuration used by the app.
 load_dotenv()
 

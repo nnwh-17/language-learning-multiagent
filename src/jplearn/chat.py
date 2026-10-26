@@ -5,6 +5,7 @@ deferred Anki writes before continuing the same conversation.
 """
 
 import asyncio
+import sys
 
 from pydantic_ai import DeferredToolRequests
 from pydantic_ai.messages import ModelMessage
@@ -50,4 +51,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    # Windows consoles default to a code page that can't print Japanese.
+    sys.stdout.reconfigure(encoding="utf-8")
     asyncio.run(main())

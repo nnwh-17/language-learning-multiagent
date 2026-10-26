@@ -7,11 +7,12 @@ example generator use ``lookup`` to ground meanings in dictionary entries.
 import json
 import sqlite3
 from functools import cache
-from pathlib import Path
 
 from pydantic import BaseModel
 
-DB_PATH = Path(__file__).resolve().parents[2] / "data" / "jmdict.sqlite"
+from jplearn.config import DATA_DIR
+
+DB_PATH = DATA_DIR / "jmdict.sqlite"
 
 
 class Sense(BaseModel):
@@ -69,6 +70,17 @@ def lookup(
 
     If `reading` (hiragana) is given, entries with that reading are preferred.
     """
+    entries = _lookup_exact(word, reading, max_entries, max_senses)
+    if not entries and word.endswith("する") and len(word) > 2:
+        # JMdict lists 勉強する under the noun 勉強 (marked "suru verb")
+        stem_reading = reading[:-2] if reading and reading.endswith("する") else None
+        entries = _lookup_exact(word[:-2], stem_reading, max_entries, max_senses)
+    return entries
+
+
+def _lookup_exact(
+    word: str, reading: str | None, max_entries: int, max_senses: int
+) -> list[DictEntry]:
     # Search indexed kanji/kana forms, then prefer the requested reading when available.
     rows = _db().execute(
         """SELECT DISTINCT e.data, e.common FROM forms f JOIN entries e ON e.id = f.entry_id

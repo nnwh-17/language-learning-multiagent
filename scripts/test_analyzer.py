@@ -11,6 +11,9 @@ from jplearn.agents.analyzer import analyzer
 from jplearn.agents.orchestrator import orchestrator, tools_used
 from jplearn.tokenizer import tokenize
 
+# Windows consoles default to a code page that can't print Japanese.
+sys.stdout.reconfigure(encoding="utf-8")
+
 SENTENCE = sys.argv[1] if len(sys.argv) > 1 else "静かな部屋で日本語を勉強しなければならない。"
 
 

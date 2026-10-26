@@ -5,20 +5,18 @@ tools to avoid duplicates, while the orchestrator's approval flow gates actual w
 """
 
 import html
-import os
 from typing import Literal
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.mcp import MCPToolset
 
 from jplearn.activity import Observe, track
 from jplearn.agents.analyzer import Breakdown, analyzer
 from jplearn.anki import anki_toolset, flashcard_toolset
-from jplearn.config import get_model
+from jplearn.config import DEFAULT_DECK, get_model
 from jplearn.user_context import use_user_context
 
-# Keep the deck configurable while providing a usable default.
-DEFAULT_DECK = os.getenv("JPLEARN_DECK", "jplearn")
 NOTE_TYPE = "Basic"  # fields: Front, Back
 
 
@@ -30,6 +28,11 @@ class Card(BaseModel):
     example: str = Field(description="Japanese example sentence, preferably from the source text")
     example_translation: str
     notes: str | None = Field(default=None, description="Short usage note, e.g. intransitive pair")
+
+
+class Sentence(BaseModel):
+    japanese: str
+    translation: str
 
 
 class CardDraft(BaseModel):
@@ -92,11 +95,6 @@ def card_fields(card: Card) -> dict[str, str]:
     return {"Front": e(card.front), "Back": "<br>".join(back).removeprefix("<br>")}
 
 
-class Sentence(BaseModel):
-    japanese: str
-    translation: str
-
-
 def sentences_html(sentences: list[Sentence]) -> str:
     e = html.escape
     return "<br><br>".join(f"{e(s.japanese)}<br><i>{e(s.translation)}</i>" for s in sentences)
@@ -108,52 +106,69 @@ async def add_examples(word: str, reading: str, meaning: str, sentences: list[Se
     async with anki_toolset() as anki:
         # Search all decks so examples extend existing cards instead of creating duplicates.
         found = await anki.direct_call_tool("findNotes", {"query": f'"front:{word}"'})
-        note_ids = found.get("noteIds", [])
+        if note_ids := found.get("noteIds", []):
+            return await _append_examples(anki, word, note_ids, sentences)
+        return await _create_example_card(anki, word, reading, meaning, sentences, deck)
 
-        if not note_ids:
-            await anki.direct_call_tool("createDeck", {"deckName": deck})
-            back = f"<b>{html.escape(reading)}</b><br>{html.escape(meaning)}<br><br>" + sentences_html(sentences)
-            result = await anki.direct_call_tool(
-                "addNote",
-                {
-                    "deckName": deck,
-                    "modelName": NOTE_TYPE,
-                    "fields": {"Front": html.escape(word), "Back": back},
-                    "tags": ["jplearn", "vocab"],
-                },
-            )
-            return {"action": "created new card", "deck": deck, "sentences_added": len(sentences), "anki": result}
 
-        # Locate each existing note's deck because notesInfo itself does not include it.
-        info = await anki.direct_call_tool("notesInfo", {"notes": note_ids})
-        # notesInfo has no deck, so find each note's deck by searching deck by deck
-        decks = (await anki.direct_call_tool("listDecks", {}))["decks"]
-        deck_of = {}
-        for d in decks:
-            hits = await anki.direct_call_tool("findNotes", {"query": f'"front:{word}" "deck:{d["name"]}" -"deck:{d["name"]}::*"'})
-            deck_of |= {note_id: d["name"] for note_id in hits.get("noteIds", [])}
-        updated = []
-        for note in info["notes"]:
-            fields = note["fields"]
-            if "Back" not in fields:
-                updated.append({"note_id": note["noteId"], "skipped": f"note type {note['modelName']} has no Back field"})
-                continue
-            back = fields["Back"]["value"]
-            new = [s for s in sentences if s.japanese not in back and html.escape(s.japanese) not in back]
-            if new:
-                await anki.direct_call_tool(
-                    "updateNoteFields",
-                    {"note": {"id": note["noteId"], "fields": {"Back": back + "<br><br>" + sentences_html(new)}}},
-                )
-            updated.append(
-                {
-                    "note_id": note["noteId"],
-                    "deck": deck_of.get(note["noteId"], "unknown"),
-                    "sentences_added": len(new),
-                    "already_on_card": len(sentences) - len(new),
-                }
+async def _create_example_card(
+    anki: MCPToolset, word: str, reading: str, meaning: str, sentences: list[Sentence], deck: str
+) -> dict:
+    e = html.escape
+    await anki.direct_call_tool("createDeck", {"deckName": deck})
+    back = f"<b>{e(reading)}</b><br>{e(meaning)}<br><br>" + sentences_html(sentences)
+    result = await anki.direct_call_tool(
+        "addNote",
+        {
+            "deckName": deck,
+            "modelName": NOTE_TYPE,
+            "fields": {"Front": e(word), "Back": back},
+            "tags": ["jplearn", "vocab"],
+        },
+    )
+    return {"action": "created new card", "deck": deck, "sentences_added": len(sentences), "anki": result}
+
+
+async def _append_examples(
+    anki: MCPToolset, word: str, note_ids: list[int], sentences: list[Sentence]
+) -> dict:
+    info = await anki.direct_call_tool("notesInfo", {"notes": note_ids})
+    deck_of = await _decks_of_notes(anki, word)
+    updated = []
+    for note in info["notes"]:
+        note_id, fields = note["noteId"], note["fields"]
+        if "Back" not in fields:
+            updated.append({"note_id": note_id, "skipped": f"note type {note['modelName']} has no Back field"})
+            continue
+        back = fields["Back"]["value"]
+        new = [s for s in sentences if s.japanese not in back and html.escape(s.japanese) not in back]
+        if new:
+            await anki.direct_call_tool(
+                "updateNoteFields",
+                {"note": {"id": note_id, "fields": {"Back": back + "<br><br>" + sentences_html(new)}}},
             )
-        return {"action": "updated existing card(s)", "notes": updated}
+        updated.append(
+            {
+                "note_id": note_id,
+                "deck": deck_of.get(note_id, "unknown"),
+                "sentences_added": len(new),
+                "already_on_card": len(sentences) - len(new),
+            }
+        )
+    return {"action": "updated existing card(s)", "notes": updated}
+
+
+async def _decks_of_notes(anki: MCPToolset, word: str) -> dict[int, str]:
+    """Note id -> deck name for the cards whose Front is `word`.
+
+    notesInfo doesn't include the deck, so search deck by deck (excluding subdecks)."""
+    decks = (await anki.direct_call_tool("listDecks", {}))["decks"]
+    deck_of = {}
+    for name in (d["name"] for d in decks):
+        query = f'"front:{word}" "deck:{name}" -"deck:{name}::*"'
+        hits = await anki.direct_call_tool("findNotes", {"query": query})
+        deck_of |= {note_id: name for note_id in hits.get("noteIds", [])}
+    return deck_of
 
 
 async def add_cards(deck: str, cards: list[Card]) -> dict:
