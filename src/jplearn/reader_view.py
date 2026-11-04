@@ -518,19 +518,27 @@ def build() -> None:
     status = gr.Markdown()
 
     with gr.Column(visible=False) as workspace:
-        gr.Markdown("#### 1. Highlight what you don't know")
-        gr.Markdown(
-            "Switch to the highlighter with your key (or the button), then select words or phrases "
-            "with the mouse. Click a highlight to remove it. Hover a word for its reading.",
-            elem_classes="hint-left",
-        )
-        pane = gr.HTML(render_text(None), html_template=PANE_TEMPLATE, js_on_load=PANE_JS, elem_id="reader-pane")
-        clear_btn = gr.Button("Clear highlights", variant="secondary", size="sm", elem_classes="reader-clear")
+        # Steps 1 and 2 side by side, half the width each (they stack on narrow screens)
+        # equal_height + CSS stretch the translation box to the height of the text beside it
+        with gr.Row(equal_height=True, elem_id="reader-steps"):
+            with gr.Column(scale=1):
+                gr.Markdown("#### 1. Highlight what you don't know")
+                gr.Markdown(
+                    "Switch to the highlighter with your key (or the button), then select words or "
+                    "phrases with the mouse. Click a highlight to remove it. Hover a word for its reading.",
+                    elem_classes="hint-left",
+                )
+                pane = gr.HTML(render_text(None), html_template=PANE_TEMPLATE, js_on_load=PANE_JS, elem_id="reader-pane")
+                clear_btn = gr.Button("Clear highlights", variant="secondary", size="sm", elem_classes="reader-clear")
 
-        gr.Markdown("#### 2. Translate it yourself")
-        translation = gr.Textbox(label="Your translation", lines=3, placeholder="Write it in English, in your own words")
-        check_btn = gr.Button("Check my translation", variant="primary")
-        feedback = gr.Markdown()
+            with gr.Column(scale=1):
+                gr.Markdown("#### 2. Translate it yourself")
+                translation = gr.Textbox(
+                    label="Your translation", lines=4, elem_id="reader-translation",
+                    placeholder="Write it in English, in your own words",
+                )
+                check_btn = gr.Button("Check my translation", variant="primary")
+                feedback = gr.Markdown()
 
         gr.Markdown("#### 3. Study your highlights")
         breakdown = gr.Markdown(elem_classes="reader-breakdown")

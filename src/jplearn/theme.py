@@ -88,6 +88,24 @@ footer {{ display: none !important; }}
 #chat .examples {{ grid-template-columns: repeat(2, 1fr) !important; max-width: 640px; margin: 0 auto; }}
 .hint, .hint * {{ text-align: center; font-size: 12px !important; color: var(--body-text-color-subdued) !important; }}
 
+/* Practice page: drawing box and typing box */
+#practice {{ max-width: 800px; width: 100%; margin: 0 auto; gap: 12px; }}
+#practice .pad-toolbar {{ display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  margin-bottom: 6px; font-size: 13px; color: var(--body-text-color-subdued); }}
+#practice .pad-toolbar button {{ border: 1px solid var(--border-color-primary); border-radius: 8px;
+  padding: 3px 10px; background: transparent; color: var(--body-text-color); cursor: pointer; }}
+#practice .pad-toolbar button:hover {{ background: var(--button-secondary-background-fill-hover); }}
+#practice kbd {{ border: 1px solid var(--border-color-primary); border-radius: 4px; padding: 0 5px;
+  font-size: 12px; background: var(--background-fill-secondary); }}
+#practice .pad-buttons {{ display: flex; gap: 6px; }}
+#practice .pad-mode[aria-pressed="true"] {{ border-color: var(--color-accent); color: var(--color-accent); }}
+#practice .pad-canvas {{ display: block; width: 100%; box-sizing: border-box;
+  border: 1px solid var(--border-color-primary); border-radius: 16px; background: var(--block-background-fill); }}
+#practice .pad-canvas {{ height: 320px; cursor: crosshair; touch-action: none; user-select: none; }}
+#kanji-pad.pen-down .pad-canvas {{ border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent-soft); }}
+#kanji-pad.pen-down .pad-status {{ color: var(--color-accent); font-weight: 600; }}
+#typing-pad textarea {{ font-family: {SERIF}; font-size: 22px; line-height: 1.8; }}
+
 /* Furigana above kanji */
 #chat ruby rt {{ font-size: 0.55em; color: var(--body-text-color-subdued); }}
 #chat .message {{ ruby-position: over; }}
@@ -120,6 +138,12 @@ footer {{ display: none !important; }}
 #tabs {{ flex-grow: 1; }}
 #chat-tab {{ display: flex; flex-direction: column; flex-grow: 1; }}
 #reader-tab {{ gap: 12px; }}
+#reader-steps {{ gap: 16px; align-items: stretch; }}
+#reader-steps > .column {{ gap: 10px; min-width: 0; }}
+/* The translation box grows to fill its column, so it matches the Japanese text's height */
+#reader-translation, #reader-translation label, #reader-translation .input-container {{
+  display: flex; flex-direction: column; flex-grow: 1; }}
+#reader-translation textarea {{ flex-grow: 1; height: 100% !important; min-height: 120px; resize: none; }}
 #reader-tab h4 {{ font-family: {SERIF}; font-weight: 500; font-size: 20px; margin: 12px 0 0; }}
 .hint-left, .hint-left * {{ font-size: 13px !important; color: var(--body-text-color-subdued) !important; }}
 .reader-text, .reader-empty {{ font-family: {SERIF}; font-size: 22px; line-height: 2; padding: 14px 16px;

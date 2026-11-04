@@ -96,6 +96,8 @@ src/jplearn/
   grammar_notes.py   short notes on particles, auxiliaries and て-form patterns
   kana.py            romaji → hiragana, furigana rendering
   web.py, theme.py   Gradio web UI and its styling
+  practice.py        the web UI's Practice page (/practice): kanji drawing (hold A, or click
+                     and drag) and a plain typing box
   chat.py            terminal UI
 ```
 

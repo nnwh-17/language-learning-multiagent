@@ -11,7 +11,7 @@ import gradio as gr
 from pydantic_ai import DeferredToolRequests, ToolDenied
 from pydantic_ai.messages import ModelMessage
 
-from jplearn import conversations, user_context
+from jplearn import conversations, practice, user_context
 from jplearn.activity import Activity, LogEntry
 from jplearn.agents.orchestrator import describe_approval, orchestrator, stream_reply, tools_used
 from jplearn.architecture import Status, all_nodes, approval_targets, render_html
@@ -448,6 +448,10 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
         delete_context, ctx_pick, [ctx_active, ctx_pick, ctx_name, ctx_scope, ctx_text, ctx_status]
     )
     ctx_active.input(toggle_context, ctx_active, None)
+
+# A second page for writing and typing practice, with no agents
+with demo.route("Practice", "/practice"):
+    practice.build()
 
 if __name__ == "__main__":
     demo.launch(theme=THEME, css=CSS)
