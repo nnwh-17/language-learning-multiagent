@@ -83,7 +83,34 @@ def next_question(session: QuizSession) -> QuizSession:
     return session.model_copy(update={"index": session.index + 1})
 
 
-# --- rendering: values for [panel, progress, question, choices, typed, feedback, check, next] ---
+# --- the panel: components, and the values for [panel, progress, question, choices, typed, feedback, check, next] ---
+
+
+def panel() -> tuple[list, gr.Button]:
+    """Create the panel's components inside the current gr.Blocks. Returns the components
+    `render` fills, and the End quiz button. Hidden until a quiz is rendered into it."""
+    with gr.Column(elem_classes="quiz-panel", visible=False) as column:
+        progress = gr.HTML()
+        question = gr.Markdown(elem_classes="quiz-question")
+        choices = gr.Radio(choices=[], show_label=False, elem_classes="quiz-choices", container=False)
+        typed = gr.Textbox(show_label=False, container=False, elem_classes="quiz-typed")
+        feedback = gr.Markdown(elem_classes="quiz-feedback")
+        with gr.Row(elem_classes="quiz-actions"):
+            check = gr.Button("Check", variant="primary", size="sm")
+            next_question = gr.Button("Next question →", variant="primary", size="sm", visible=False)
+            end = gr.Button("End quiz", variant="secondary", size="sm")
+    return [column, progress, question, choices, typed, feedback, check, next_question], end
+
+
+def check_answer(session: QuizSession | None, choice: str | None, typed: str):
+    """Mark the answer given in the panel. Values for [quiz_state, *panel]."""
+    if session is None or session.checked:
+        return (gr.skip(),) * (1 + UI_SIZE)
+    response = (choice if session.question.kind == "choice" else typed) or ""
+    if not response.strip():
+        return session, *render(session, notice="Choose or type an answer first.")
+    session = answer(session, response.strip())
+    return session, *render(session)
 
 
 def render(session: QuizSession | None, notice: str = "") -> tuple:
@@ -117,6 +144,9 @@ def render(session: QuizSession | None, notice: str = "") -> tuple:
         gr.Button(visible=not checked and question.kind != "choice"),  # choices are marked on click
         gr.Button(visible=checked, value="See results" if session.is_last else "Next question →"),
     )
+
+
+UI_SIZE = len(render(None))
 
 
 def _progress(session: QuizSession) -> str:

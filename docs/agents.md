@@ -14,6 +14,7 @@ tools. The orchestrator decides which one to use from the tool descriptions in i
 | Example sentences (`examples`) | `generate_examples` | `lookup_word` (JMdict), plus an output check | `ExampleSet` |
 | Researcher (`researcher`) | `find_material` | `search_web` (DuckDuckGo), `fetch_page` | `Material` |
 | Quiz maker (`quiz`) | `start_quiz` | `lookup_word` (JMdict), plus an output check | `Quiz` (shown in the quiz panel) |
+| Translation checker (`translation`) | none: the Read & translate tab runs it | none (gets a word list from the tokenizer and JMdict) | `TranslationReview` |
 
 The orchestrator also has `lookup_word` (JMdict) for quick "what does X mean" questions, and
 the two Anki write tools that need approval: `add_flashcards` and `add_examples_to_card`.
@@ -106,6 +107,18 @@ learner's level) that the learner answers in the web UI's quiz panel.
 - `start_quiz` returns the quiz as `ToolReturn` **metadata**: the UI gets the questions and
   answers, while the orchestrator only learns that a quiz is showing, so it can't give the
   answers away. See [architecture.md](architecture.md#quizzes-web-ui) for the panel.
+
+## Translation checker
+
+[translation.py](../src/jplearn/agents/translation.py). Reviews the learner's own
+translation in the Read & translate tab (see
+[architecture.md](architecture.md#read--translate-web-ui)).
+
+- Gets the text, a word list of it (tokenizer + JMdict + grammar notes, no translation),
+  what the learner highlighted, and their translation (`review_prompt()`).
+- Judges meaning, not wording: free translations and English typos are fine.
+- Each `Mistake` quotes the part of the text it is about (`japanese`), so the tab can
+  highlight it for the quiz and cards.
 
 ## Adding an agent
 

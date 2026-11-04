@@ -88,8 +88,9 @@ def card_fields(card: Card) -> dict[str, str]:
     """Anki Basic note fields for a card."""
     # Escape learner/model text before embedding it into Anki's HTML field.
     e = html.escape
-    back = [f"<b>{e(card.reading)}</b>" if card.reading else "", e(card.meaning), ""]
-    back += [e(card.example), f"<i>{e(card.example_translation)}</i>"]
+    back = [f"<b>{e(card.reading)}</b>" if card.reading else "", e(card.meaning)]
+    if card.example:  # cards from the Read & translate tab can have none
+        back += ["", e(card.example), f"<i>{e(card.example_translation)}</i>"]
     if card.notes:
         back += ["", f"<small>{e(card.notes)}</small>"]
     return {"Front": e(card.front), "Back": "<br>".join(back).removeprefix("<br>")}

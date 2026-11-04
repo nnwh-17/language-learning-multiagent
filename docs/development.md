@@ -34,6 +34,7 @@ same on any machine and in CI (GitHub Actions runs them on every push and pull r
 | `test_web.py` | A full web turn: streaming, locked composer, replying instead of approving, errors, furigana |
 | `test_conversations.py` | Saving and reopening chats, resuming history, a pending approval surviving a reload |
 | `test_quiz.py` | Romaji input, marking, the question check, the quiz panel, a whole quiz played through the web UI |
+| `test_reader.py` | The Read & translate tab: highlighting, breakdowns, checking a translation, its quiz and cards (the pane's JavaScript isn't covered) |
 
 When you add a feature, add a test next to the closest existing one. For a new agent, copy
 `test_orchestrator_delegates_to_explainer_with_users_context`.

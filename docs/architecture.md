@@ -142,6 +142,42 @@ Asking to be quizzed ("quiz me on N5 verbs") opens a quiz panel under the chat. 
    `[quiz <id> finished]`. The orchestrator replies with feedback on the mistakes. That
    marker also tells `active_quiz` the quiz is done, so it doesn't reopen.
 
+## Read & translate (web UI)
+
+The second tab, in [reader_view.py](../src/jplearn/reader_view.py), is for working through a
+text yourself rather than chatting. It doesn't go through the orchestrator, and only checking
+the translation calls a model; everything else comes from the tokenizer, JMdict and
+[grammar_notes.py](../src/jplearn/grammar_notes.py).
+
+1. **Start reading** shows the text (up to 1,000 characters) in the reading pane, a custom
+   `gr.HTML` whose every piece of text is a span carrying its character offset (`data-s`).
+   Hovering a word shows its reading.
+2. **Highlighting.** A key (default **H**, changeable with **Change key**, stored in the
+   browser's localStorage) or the toolbar button toggles the highlighter cursor. The pane's
+   script (`PANE_JS`, run by `js_on_load`) turns a mouse selection into code-point offsets
+   and sends `trigger('select', {action: 'add', start, end})`; clicking a highlight sends
+   `remove`. `on_select` snaps the selection to whole tokens (`add_highlight`), merging
+   overlaps, and re-renders. The key is ignored while typing in a text box; Esc turns the
+   highlighter off.
+3. **Breakdown.** Each highlight is broken down straight away by `items_in()`, shown under
+   step 3 (Study your highlights) so it doesn't sit between the text and the translation box. Content words
+   get their dictionary form, reading and JMdict meaning (and the form used in the text);
+   particles and auxiliaries get a note from `GRAMMAR_NOTES` (JMdict reads が as 画,
+   "picture"); て + いる, しまう, みる... become one pattern from `TE_PATTERNS` (〜ている).
+4. **Check my translation** runs the Translation checker
+   ([translation.py](../src/jplearn/agents/translation.py)) with the text, a word list of it
+   from the same breakdown (`word_list()`), the highlights and the learner's attempt. Each
+   mistake quotes the part of the text it is about, which is then highlighted in red
+   (`source="mistake"`), so it joins the breakdown, quiz and cards.
+5. **Quiz me** builds the quiz from the highlights without a model (`make_quiz()`): reading
+   questions for words with kanji, meaning choices (wrong options are other words' meanings
+   from the text), particles blanked out of their sentence, and pattern meanings (wrong
+   options from the grammar notes). It is shown in the tab's own copy of the quiz panel
+   (`quiz_view.panel()`) and marked by the usual `grade()`.
+6. **Make flashcards** builds a card per highlighted item, with its sentence as the example.
+   Nothing is written until **Add to Anki** is clicked; that click is the approval for
+   exactly the cards in the preview.
+
 ## Saved chats (web UI)
 
 [conversations.py](../src/jplearn/conversations.py) saves each web chat to

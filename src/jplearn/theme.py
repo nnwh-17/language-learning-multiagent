@@ -92,29 +92,62 @@ footer {{ display: none !important; }}
 #chat ruby rt {{ font-size: 0.55em; color: var(--body-text-color-subdued); }}
 #chat .message {{ ruby-position: over; }}
 
-/* Quiz panel: a card under the chat, one question at a time */
-#quiz {{ border: 1px solid var(--border-color-primary) !important; border-radius: 16px !important;
+/* Quiz panel: a card under the chat (or in Read & translate), one question at a time */
+.quiz-panel {{ border: 1px solid var(--border-color-primary) !important; border-radius: 16px !important;
   background: var(--block-background-fill) !important; padding: 14px 16px !important; gap: 10px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); }}
-#quiz .quiz-head {{ display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
+.quiz-panel .quiz-head {{ display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
   color: var(--body-text-color-subdued); }}
-#quiz .quiz-head b {{ color: var(--body-text-color); font-weight: 600; }}
-#quiz .quiz-bar {{ display: flex; gap: 4px; margin-top: 8px; }}
-#quiz .quiz-bar .step {{ flex: 1; height: 5px; border-radius: 3px; background: var(--border-color-primary); }}
-#quiz .quiz-bar .step.current {{ background: var(--color-accent); opacity: 0.45; }}
-#quiz .quiz-bar .step.right {{ background: #3f9a5b; }}
-#quiz .quiz-bar .step.wrong {{ background: #d1574b; }}
-#quiz-question {{ font-size: 17px; line-height: 1.6; }}
-#quiz-question h2 {{ font-family: {SERIF}; font-size: 34px; font-weight: 500; margin: 8px 0 0; }}
-#quiz-choices .wrap {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }}
-#quiz-choices label {{ border: 1px solid var(--border-color-primary) !important; border-radius: 10px !important;
+.quiz-panel .quiz-head b {{ color: var(--body-text-color); font-weight: 600; }}
+.quiz-panel .quiz-bar {{ display: flex; gap: 4px; margin-top: 8px; }}
+.quiz-panel .quiz-bar .step {{ flex: 1; height: 5px; border-radius: 3px; background: var(--border-color-primary); }}
+.quiz-panel .quiz-bar .step.current {{ background: var(--color-accent); opacity: 0.45; }}
+.quiz-panel .quiz-bar .step.right {{ background: #3f9a5b; }}
+.quiz-panel .quiz-bar .step.wrong {{ background: #d1574b; }}
+.quiz-question {{ font-size: 17px; line-height: 1.6; }}
+.quiz-question h2 {{ font-family: {SERIF}; font-size: 34px; font-weight: 500; margin: 8px 0 0; }}
+.quiz-choices .wrap {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }}
+.quiz-choices label {{ border: 1px solid var(--border-color-primary) !important; border-radius: 10px !important;
   padding: 10px 14px !important; background: var(--background-fill-primary) !important; font-size: 15px; }}
-#quiz-choices label.selected {{ border-color: var(--color-accent) !important;
+.quiz-choices label.selected {{ border-color: var(--color-accent) !important;
   background: var(--color-accent-soft) !important; }}
-#quiz-typed textarea {{ font-size: 17px; }}
-#quiz-feedback {{ font-size: 15px; line-height: 1.6; }}
-#quiz-actions {{ gap: 8px; justify-content: flex-end; }}
-#quiz-actions button {{ flex: 0 0 auto; min-width: 120px; border-radius: 10px; }}
+.quiz-typed textarea {{ font-size: 17px; }}
+.quiz-feedback {{ font-size: 15px; line-height: 1.6; }}
+.quiz-actions {{ gap: 8px; justify-content: flex-end; }}
+.quiz-actions button {{ flex: 0 0 auto; min-width: 120px; border-radius: 10px; }}
+
+/* Read & translate tab */
+#tabs {{ flex-grow: 1; }}
+#chat-tab {{ display: flex; flex-direction: column; flex-grow: 1; }}
+#reader-tab {{ gap: 12px; }}
+#reader-tab h4 {{ font-family: {SERIF}; font-weight: 500; font-size: 20px; margin: 12px 0 0; }}
+.hint-left, .hint-left * {{ font-size: 13px !important; color: var(--body-text-color-subdued) !important; }}
+.reader-text, .reader-empty {{ font-family: {SERIF}; font-size: 22px; line-height: 2; padding: 14px 16px;
+  border: 1px solid var(--border-color-primary); border-radius: 12px; background: var(--block-background-fill);
+  white-space: pre-wrap; }}
+.reader-empty {{ font-size: 15px; color: var(--body-text-color-subdued); }}
+.reader-text .hl {{ background: #fde68a; border-radius: 3px; box-shadow: 0 2px 0 #f59e0b; }}
+.reader-text .hl.mistake {{ background: #fecaca; box-shadow: 0 2px 0 #d1574b; }}
+.dark .reader-text .hl {{ background: #6b5313; box-shadow: 0 2px 0 #f59e0b; }}
+.dark .reader-text .hl.mistake {{ background: #6b2a24; box-shadow: 0 2px 0 #d1574b; }}
+.hl-bar {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px;
+  color: var(--body-text-color-subdued); }}
+.hl-bar button {{ border: 1px solid var(--border-color-primary); border-radius: 8px; padding: 4px 10px;
+  background: var(--block-background-fill); color: var(--body-text-color); cursor: pointer; font-size: 13px; }}
+.hl-bar .hl-setkey {{ border: none; background: none; padding: 0; text-decoration: underline;
+  color: var(--body-text-color-subdued); }}
+.hl-bar kbd {{ border: 1px solid var(--border-color-primary); border-bottom-width: 2px; border-radius: 5px;
+  padding: 0 6px; font-family: var(--font-mono); color: var(--body-text-color); }}
+html:not([data-hl="on"]) .hl-bar .mode-on, html[data-hl="on"] .hl-bar .mode-off {{ display: none; }}
+html[data-hl="on"] .hl-toggle {{ background: #fde68a; border-color: #f59e0b; color: #141413; }}
+/* Highlighter cursor and selection colour while highlighting */
+html[data-hl="on"] .reader-text {{ cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M4 20l3-1 11-11-2-2L5 17z' fill='%23f59e0b' stroke='%23141413' stroke-width='1.2'/><path d='M3 21h7' stroke='%23f59e0b' stroke-width='3'/></svg>") 3 21, text;
+  border-color: #f59e0b; }}
+html[data-hl="on"] .reader-text ::selection {{ background: #fde68a; color: inherit; }}
+html[data-hl="on"] .reader-text .hl {{ cursor: pointer; }}
+.reader-clear {{ align-self: flex-start; }}
+#reader-tab button.secondary {{ border: 1px solid var(--border-color-primary); }}
+.reader-breakdown {{ font-size: 15px; line-height: 1.6; }}
 
 #approval {{ gap: 8px; justify-content: center; }}
 #approval button {{ max-width: 160px; border-radius: 10px; }}

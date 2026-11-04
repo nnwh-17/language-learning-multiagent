@@ -1,7 +1,8 @@
 """Run the Gradio chat interface for the jplearn orchestrator.
 
 This frontend manages per-tab conversation and approval state, streams activity updates,
-and provides controls for viewing the agent graph and editing saved learner context.
+and provides controls for viewing the agent graph and editing saved learner context. The
+Read & translate tab lives in reader_view.py.
 """
 
 import time
@@ -15,9 +16,9 @@ from jplearn.activity import Activity, LogEntry
 from jplearn.agents.orchestrator import describe_approval, orchestrator, stream_reply, tools_used
 from jplearn.architecture import Status, all_nodes, approval_targets, render_html
 from jplearn.kana import with_furigana
-from jplearn import quiz_view
+from jplearn import quiz_view, reader_view
 from jplearn.log_view import render_log
-from jplearn.quiz_view import QuizSession
+from jplearn.quiz_view import QuizSession, check_answer
 from jplearn.theme import CSS, THEME
 from jplearn.user_context import AGENTS, ALL, ContextItem
 
@@ -207,16 +208,6 @@ def sync_quiz(history, session: QuizSession | None):
     return found, *quiz_view.render(found)
 
 
-def check_answer(session: QuizSession | None, choice: str | None, typed: str):
-    if session is None or session.checked:
-        return (gr.skip(),) * (1 + QUIZ_UI_SIZE)
-    response = (choice if session.question.kind == "choice" else typed) or ""
-    if not response.strip():
-        return session, *quiz_view.render(session, notice="Choose or type an answer first.")
-    session = quiz_view.answer(session, response.strip())
-    return session, *quiz_view.render(session)
-
-
 async def finish_quiz(session: QuizSession | None, chat, history, pending, status, log, graph):
     """Close the panel and send the results to the orchestrator for feedback.
     Values for [*out, quiz_state, *quiz_ui]."""
@@ -244,7 +235,7 @@ async def advance_quiz(session: QuizSession | None, chat, history, pending, stat
         yield update
 
 
-QUIZ_UI_SIZE = len(quiz_view.render(None))
+QUIZ_UI_SIZE = quiz_view.UI_SIZE
 OUT_SIZE = len(outputs([], [], None, {}, [], False, False))  # values in `out`
 
 
@@ -342,7 +333,8 @@ def pick_example(evt: gr.SelectData) -> str:
     return evt.value["text"]
 
 
-# Left: new chat and saved preferences. Centre: the conversation. Right: what the agents are doing.
+# Left: new chat and saved preferences. Centre: the conversation, and the Read & translate
+# tab. Right: what the agents are doing.
 with gr.Blocks(title="jplearn", fill_height=True) as demo:
     with gr.Sidebar(label="Menu", open=True, position="left", width=300) as menu:
         gr.Markdown("## 日本語 tutor", elem_classes="brand")
@@ -381,49 +373,44 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
         gr.Markdown("### Activity")
         log_view = gr.HTML(render_log([]))
 
-    with gr.Column(elem_id="main", scale=1):
-        chatbot = gr.Chatbot(
-            elem_id="chat",
-            show_label=False,
-            scale=1,
-            placeholder=PLACEHOLDER,
-            examples=EXAMPLES,
-            buttons=["copy"],
-        )
-        history = gr.State([])  # PydanticAI message history, one per browser tab
-        pending = gr.State(None)  # DeferredToolRequests waiting for approval
-        status = gr.State({})  # architecture node id -> status, for the side panel
-        log = gr.State([])  # LogEntry list for the activity log
-        chat_id = gr.State(None)  # id of the saved chat shown in this tab (None until the first save)
-        quiz_state = gr.State(None)  # QuizSession for the quiz panel, or None
-        with gr.Column(elem_id="quiz", visible=False) as quiz_panel:
-            quiz_progress = gr.HTML()
-            quiz_question = gr.Markdown(elem_id="quiz-question")
-            quiz_choices = gr.Radio(choices=[], show_label=False, elem_id="quiz-choices", container=False)
-            quiz_typed = gr.Textbox(show_label=False, container=False, elem_id="quiz-typed")
-            quiz_feedback = gr.Markdown(elem_id="quiz-feedback")
-            with gr.Row(elem_id="quiz-actions"):
-                quiz_check = gr.Button("Check", variant="primary", size="sm")
-                quiz_next = gr.Button("Next question →", variant="primary", size="sm", visible=False)
-                quiz_end = gr.Button("End quiz", variant="secondary", size="sm")
-        with gr.Row(elem_id="approval"):
-            approve_btn = gr.Button("Approve", variant="primary", visible=False)
-            reject_btn = gr.Button("Reject", variant="secondary", visible=False)
-        box = gr.Textbox(
-            elem_id="composer",
-            placeholder=COMPOSER_HINTS["idle"],
-            show_label=False,
-            container=False,
-            lines=1,
-            max_lines=8,
-            submit_btn=True,
-            autofocus=True,
-        )
-        gr.Markdown("Open **Agents** on the right to watch each step.", elem_classes="hint")
+    with gr.Column(elem_id="main", scale=1), gr.Tabs(elem_id="tabs"):
+        with gr.Tab("Chat", elem_id="chat-tab", scale=1):
+            chatbot = gr.Chatbot(
+                elem_id="chat",
+                show_label=False,
+                scale=1,
+                placeholder=PLACEHOLDER,
+                examples=EXAMPLES,
+                buttons=["copy"],
+            )
+            history = gr.State([])  # PydanticAI message history, one per browser tab
+            pending = gr.State(None)  # DeferredToolRequests waiting for approval
+            status = gr.State({})  # architecture node id -> status, for the side panel
+            log = gr.State([])  # LogEntry list for the activity log
+            chat_id = gr.State(None)  # id of the saved chat shown in this tab (None until the first save)
+            quiz_state = gr.State(None)  # QuizSession for the quiz panel, or None
+            quiz_ui, quiz_end = quiz_view.panel()
+            _, _, _, quiz_choices, quiz_typed, _, quiz_check, quiz_next = quiz_ui
+            with gr.Row(elem_id="approval"):
+                approve_btn = gr.Button("Approve", variant="primary", visible=False)
+                reject_btn = gr.Button("Reject", variant="secondary", visible=False)
+            box = gr.Textbox(
+                elem_id="composer",
+                placeholder=COMPOSER_HINTS["idle"],
+                show_label=False,
+                container=False,
+                lines=1,
+                max_lines=8,
+                submit_btn=True,
+                autofocus=True,
+            )
+            gr.Markdown("Open **Agents** on the right to watch each step.", elem_classes="hint")
+
+        with gr.Tab("Read & translate", elem_id="reader-tab"):
+            reader_view.build()
 
     state = [chatbot, history, pending, status, log]
     out = [box, *state, architecture, log_view, approve_btn, reject_btn]
-    quiz_ui = [quiz_panel, quiz_progress, quiz_question, quiz_choices, quiz_typed, quiz_feedback, quiz_check, quiz_next]
     # Every turn is followed by a save, so chats survive a reload or restart, and by a quiz
     # sync, which opens a quiz the turn started (or the open chat's unfinished one)
     save = (save_chat, [chat_id, chatbot, history, pending], [chat_id, chats])

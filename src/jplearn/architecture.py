@@ -98,7 +98,15 @@ orchestrator = Node(
     ],
     approval={"add_flashcards", "add_examples_to_card"},
 )
-user = Node("user", "You", "user", "chat", calls=[("message", orchestrator)])
+translation = Node(
+    "translation",
+    "Translation checker",
+    "agent",
+    "reviews your own translation (Read & translate tab)",
+)
+user = Node(
+    "user", "You", "user", "chat", calls=[("message", orchestrator), ("Read & translate", translation)]
+)
 
 ROOT = user
 
@@ -130,6 +138,7 @@ def check_against_agents() -> list[str]:
     from jplearn.agents.orchestrator import orchestrator as orchestrator_agent
     from jplearn.agents.quiz import quiz_agent
     from jplearn.agents.researcher import researcher as researcher_agent
+    from jplearn.agents.translation import translation_checker
     from jplearn.anki import FLASHCARD_TOOLS
 
     problems = []
@@ -141,6 +150,7 @@ def check_against_agents() -> list[str]:
         (examples, examples_agent),
         (explainer, explainer_agent),
         (quiz, quiz_agent),
+        (translation, translation_checker),
     ]:
         # MCP toolsets only know their tools once connected, so compare function tools only
         actual = {name for ts in agent.toolsets for name in getattr(ts, "tools", {})}

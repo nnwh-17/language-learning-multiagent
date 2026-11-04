@@ -84,8 +84,18 @@ def _reading(text: str) -> str:
     )
 
 
+class PlacedToken(Token):
+    start: int  # character offsets of the token in the text
+    end: int
+
+
 def tokenize(text: str) -> list[Token]:
     """Split Japanese text into words with reading, dictionary form and part of speech."""
+    return [Token(**token.model_dump(exclude={"start", "end"})) for token in tokenize_placed(text)]
+
+
+def tokenize_placed(text: str) -> list[PlacedToken]:
+    """`tokenize`, with where each token is in the text (for highlighting in the web UI)."""
     tokens = []
     # Convert Sudachi's token metadata into stable, English-labelled model input.
     for m in _tokenizer().tokenize(text, SplitMode.C):
@@ -95,7 +105,7 @@ def tokenize(text: str) -> list[Token]:
         lemma = m.dictionary_form()
         form = next((en for jp, en in FORM_EN.items() if pos[5].startswith(jp)), None)
         tokens.append(
-            Token(
+            PlacedToken(
                 surface=m.surface(),
                 reading=_reading_of(m.surface(), m.reading_form()),
                 lemma=lemma,
@@ -103,6 +113,8 @@ def tokenize(text: str) -> list[Token]:
                 pos=POS_EN.get(pos[0], pos[0]),
                 pos_detail=",".join(p for p in pos[:5] if p != "*"),
                 conjugation=form,
+                start=m.begin(),
+                end=m.end(),
             )
         )
     return tokens
