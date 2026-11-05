@@ -6,7 +6,9 @@
    tokens, and each highlight is broken down straight away from the tokenizer, JMdict and
    grammar_notes.py, again without a model.
 3. They write their own translation; the translation checker (the tab's one model call)
-   reviews it, and the part of the text behind each mistake is highlighted too.
+   reviews it, and the part of the text behind each mistake is highlighted too. In offline
+   mode there is no model call: the translation is compared with each word's dictionary
+   meanings instead (``self_check_markdown``), as a rough guide the learner checks themselves.
 4. The highlights become a quiz (readings, meanings, particles; built here, no model) or
    Anki cards, added only when the learner clicks Add.
 """
@@ -297,6 +299,87 @@ def review_markdown(review: TranslationReview) -> str:
     return with_furigana("\n".join(lines))
 
 
+# --- offline mode: checking a translation against the dictionary (no model) ---
+
+# Words that say nothing about whether a meaning was translated
+STOPWORDS = {
+    "a", "an", "the", "to", "of", "in", "on", "at", "by", "for", "with", "from", "as", "or", "and",
+    "be", "is", "are", "am", "was", "were", "been", "it", "one", "someone", "something", "oneself",
+    "one's", "etc", "esp", "very", "also", "not", "do", "does", "did",
+}
+# Common irregular forms, mapped to the base form dictionary glosses use
+IRREGULAR = {
+    "ate": "eat", "eaten": "eat", "went": "go", "gone": "go", "goes": "go", "saw": "see", "seen": "see",
+    "had": "have", "has": "have", "made": "make", "came": "come", "took": "take", "taken": "take",
+    "gave": "give", "given": "give", "said": "say", "got": "get", "bought": "buy", "drank": "drink",
+    "wrote": "write", "written": "write", "ran": "run", "slept": "sleep", "met": "meet",
+    "thought": "think", "felt": "feel", "left": "leave", "knew": "know", "known": "know",
+    "spoke": "speak", "spoken": "speak", "taught": "teach", "found": "find", "heard": "hear",
+    "sat": "sit", "stood": "stand", "became": "become", "began": "begin", "brought": "bring",
+    "children": "child", "people": "person", "men": "man", "women": "woman", "mice": "mouse",
+}
+
+
+def _stem(word: str) -> str:
+    """A rough base form, so 'studied', 'studies' and 'study' match each other."""
+    if word in IRREGULAR:
+        return IRREGULAR[word]
+    if word.endswith(("ied", "ies")) and len(word) > 4:
+        return word[:-3] + "y"
+    for suffix in ("ing", "ed", "es", "s", "ly"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
+def _stems(text: str) -> set[str]:
+    return {_stem(w) for w in re.findall(r"[a-z']+", text.lower()) if w not in STOPWORDS and len(w) > 1}
+
+
+def _all_meanings(item: Item) -> list[str]:
+    entries = lookup(item.key, item.reading or None, max_entries=1)
+    return [m for sense in entries[0].senses for m in sense.meanings] if entries else []
+
+
+def self_check(reading: Reading, translation: str) -> list[tuple[Item, bool | None]]:
+    """Each word in the text, with whether one of its dictionary meanings appears in the
+    translation (None: not in the dictionary, so it can't be checked)."""
+    said = _stems(translation)
+    rows, seen = [], set()
+    for item in items_in(reading.tokens(), 0, len(reading.text)):
+        # する is almost always part of a noun + する verb (勉強する), so it's checked with its noun
+        if item.kind != "vocab" or item.key in seen or item.key == "する":
+            continue
+        seen.add(item.key)
+        meanings = _all_meanings(item)
+        rows.append((item, any(_stems(m) & said for m in meanings) if meanings else None))
+    return rows
+
+
+def self_check_markdown(reading: Reading, translation: str) -> str:
+    rows = self_check(reading, translation)
+    checked = [found for _, found in rows if found is not None]
+    lines = [
+        f"**Self-check (offline, no AI).** Your translation uses the dictionary meaning of "
+        f"**{sum(checked)} of {len(checked)}** words. This is a rough guide: a synonym or a natural "
+        "rewording counts as missed here, so judge each ❔ yourself.",
+        "",
+    ]
+    if rows:
+        lines += ["| Word | Reading | Dictionary meaning | In your translation? |", "|---|---|---|---|"]
+        status = {True: "✅ found", False: "❔ possibly missed", None: "— not in the dictionary"}
+        for item, found in rows:
+            word = item.key if item.surface == item.key else f"{item.surface} → {item.key}"
+            reading_text = item.reading if item.reading != item.key else ""
+            lines.append(f"| {word} | {reading_text} | {item.meaning or '–'} | {status[found]} |")
+        lines.append("")
+    grammar = {(i.key, i.meaning) for i in items_in(reading.tokens(), 0, len(reading.text)) if i.kind == "grammar"}
+    if grammar:
+        lines += ["#### Grammar to check you covered", *(f"- **{key}** · {meaning}" for key, meaning in sorted(grammar)), ""]
+    lines.append("_Highlight anything you missed, so it's in your quiz and cards._")
+    return "\n".join(lines)
+
+
 # --- studying: quizzes and cards (no model) ---
 
 
@@ -426,14 +509,17 @@ def _error(e: Exception) -> str:
     return f"⚠️ Something went wrong, please try again. `{type(e).__name__}: {e}`"
 
 
-async def check_translation(reading: Reading | None, translation: str):
-    """Values for [reading, feedback, pane, breakdown]."""
+async def check_translation(reading: Reading | None, translation: str, offline: bool = False):
+    """Values for [reading, feedback, pane, breakdown]. Offline: a dictionary self-check, no model."""
     skip = (gr.skip(),) * 2
     if reading is None:
         yield gr.skip(), "Start reading a text first.", *skip
         return
     if not translation.strip():
         yield gr.skip(), "Write your translation first, even a rough one.", *skip
+        return
+    if offline:
+        yield gr.skip(), self_check_markdown(reading, translation), *skip
         return
     yield gr.skip(), "⏳ Checking your translation…", *skip
     highlighted = [reading.text[h.start : h.end] for h in reading.highlights]
@@ -502,6 +588,8 @@ INTRO = """### Read & translate
 Paste a Japanese text and highlight what you don't know. Translate it in your own words and
 get your mistakes explained, then study the breakdown of everything you highlighted."""
 
+CHECK_LABELS = {False: "Check my translation", True: "Compare with the dictionary"}
+
 
 def build() -> None:
     """Create the tab's components and wire them up, inside the current gr.Blocks."""
@@ -510,6 +598,13 @@ def build() -> None:
     quiz_state = gr.State(None)  # QuizSession for this tab's quiz panel
 
     gr.Markdown(INTRO)
+    offline = gr.Checkbox(
+        label="🔌 Offline mode: no AI",
+        info="Check your translation against the dictionary instead of asking the AI. "
+        "Highlighting, the breakdown, the quiz and the cards never use the AI.",
+        value=False,
+        elem_id="reader-offline",
+    )
     text = gr.Textbox(
         label="Japanese text", lines=4, max_lines=12,
         placeholder="e.g. 昨日、友達と一緒に新しいレストランに行きました。",
@@ -537,8 +632,10 @@ def build() -> None:
                     label="Your translation", lines=4, elem_id="reader-translation",
                     placeholder="Write it in English, in your own words",
                 )
-                check_btn = gr.Button("Check my translation", variant="primary")
-                feedback = gr.Markdown()
+                check_btn = gr.Button(CHECK_LABELS[False], variant="primary")
+
+        # The review or self-check, full width under both steps (its tables need the room)
+        feedback = gr.Markdown(elem_id="reader-feedback")
 
         gr.Markdown("#### 3. Study your highlights")
         breakdown = gr.Markdown(elem_classes="reader-breakdown")
@@ -563,7 +660,8 @@ def build() -> None:
     start_btn.click(start_reading, text, start_out)
     pane.select(on_select, reading, [reading, pane, breakdown])
     clear_btn.click(clear_highlights, reading, [reading, pane, breakdown])
-    check_btn.click(check_translation, [reading, translation], [reading, feedback, pane, breakdown])
+    check_btn.click(check_translation, [reading, translation, offline], [reading, feedback, pane, breakdown])
+    offline.change(lambda on: gr.Button(value=CHECK_LABELS[on]), offline, check_btn, queue=False)
 
     quiz_out = [quiz_state, *quiz_ui, quiz_results]
     quiz_btn.click(start_quiz, reading, [study_status, *quiz_out])

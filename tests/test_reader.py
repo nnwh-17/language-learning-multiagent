@@ -151,6 +151,44 @@ async def test_check_needs_a_translation():
     assert updates[-1][1].startswith("Write your translation first")
 
 
+# --- offline mode: no model at all ---
+# Model requests are blocked in tests (conftest.py), so these would fail if anything called the LLM.
+
+
+def test_stems_match_inflected_and_irregular_forms():
+    assert reader_view._stems("The cat ate the fish. I studied.") == {"cat", "eat", "fish", "study"}
+    assert reader_view._stems("studies studying") == {"study"}
+
+
+def test_self_check_finds_meanings_in_the_translation():
+    rows = {item.key: found for item, found in reader_view.self_check(Reading(text=TEXT), "The cat ate the fish. I study every day.")}
+    assert rows["食べる"] is True and rows["勉強"] is True  # "ate" counts as "to eat"
+    assert rows["猫"] is None  # not in the test dictionary, so it can't be checked
+    assert "する" not in rows  # part of 勉強する, checked with 勉強
+
+
+def test_self_check_flags_possibly_missed_words():
+    rows = {item.key: found for item, found in reader_view.self_check(Reading(text=TEXT), "The cat drank the fish.")}
+    assert rows["食べる"] is False and rows["勉強"] is False
+
+
+@pytest.mark.anyio
+async def test_offline_check_needs_no_model():
+    reading = add_highlight(Reading(text=TEXT), 14, 16)
+    updates = [u async for u in check_translation(reading, "The cat drank the fish. I study daily.", offline=True)]
+    assert len(updates) == 1  # no "checking…" wait, nothing to wait for
+    _reading, feedback, *_ = updates[0]
+    assert feedback.startswith("**Self-check (offline, no AI).**")
+    assert "| 食べ → 食べる | たべる | to eat | ❔ possibly missed |" in feedback
+    assert "| 勉強 | べんきょう | study | ✅ found |" in feedback
+    assert "- **〜てしまう** ·" in feedback  # grammar to check
+
+
+def test_whole_tab_works_offline_highlight_quiz_and_cards():
+    reading = add_highlight(Reading(text=TEXT), 4, 11)  # 食べてしまった
+    assert make_quiz(reading) is not None and draft_cards(reading)
+
+
 # --- quiz and cards, without a model ---
 
 

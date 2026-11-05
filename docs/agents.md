@@ -119,6 +119,7 @@ translation in the Read & translate tab (see
 - Judges meaning, not wording: free translations and English typos are fine.
 - Each `Mistake` quotes the part of the text it is about (`japanese`), so the tab can
   highlight it for the quiz and cards.
+- In the tab's offline mode it isn't run at all; a dictionary self-check replaces it.
 
 ## Adding an agent
 

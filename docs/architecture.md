@@ -169,6 +169,12 @@ the translation calls a model; everything else comes from the tokenizer, JMdict 
    from the same breakdown (`word_list()`), the highlights and the learner's attempt. Each
    mistake quotes the part of the text it is about, which is then highlighted in red
    (`source="mistake"`), so it joins the breakdown, quiz and cards.
+
+   **Offline mode** (the 🔌 checkbox) skips the model: the button becomes **Compare with
+   the dictionary** and `self_check_markdown()` lists each word with whether one of its JMdict
+   meanings appears in the translation (rough English stemming plus common irregular verbs),
+   and the grammar points to check. The learner judges the ❔ rows and highlights what they
+   missed. Every other step in the tab already works without a model.
 5. **Quiz me** builds the quiz from the highlights without a model (`make_quiz()`): reading
    questions for words with kanji, meaning choices (wrong options are other words' meanings
    from the text), particles blanked out of their sentence, and pattern meanings (wrong
