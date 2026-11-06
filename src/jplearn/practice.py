@@ -1,15 +1,18 @@
-"""The web UI's Practice page: free writing and typing practice, no agents involved.
+"""The web UI's Practice tab: free writing and typing practice, no agents involved.
 
 Both boxes run entirely in the browser: nothing calls a model or is saved. ``web.py``
-mounts the page at ``/practice``.
+shows it as a tab beside Read & translate.
 
 - Writing: a canvas with two pen modes, switched by a toggle. "Hold A" (the default) puts the
   pen down only while ``PEN_KEY`` is held, so you draw by moving the mouse; "Click & drag" is
   normal drawing. Touch and stylus always draw on contact, since they have no key to hold.
-- Typing: a plain text box.
+- Typing: a plain text box, with a Listen bar that reads what you typed aloud using the
+  browser's own voice (speech.py), to check how it sounds.
 """
 
 import gradio as gr
+
+from jplearn import speech
 
 PEN_KEY = "KeyA"  # KeyboardEvent.code of the key that puts the pen down
 PEN_KEY_LABEL = "A"
@@ -87,8 +90,10 @@ function typing() {
 }
 
 // Hold-key mode: the key works anywhere on the page, except while typing in a text box
+// or while the Practice tab is closed
 document.addEventListener('keydown', (e) => {
   if (!keyMode || e.code !== KEY || typing() || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (canvas.offsetParent === null) return;  // the pad is on a tab that isn't open
   e.preventDefault();
   if (e.repeat || penDown) return;
   penDown = true;
@@ -132,8 +137,6 @@ show();
 def build() -> None:
     """Lay out the page inside the current Blocks or route."""
     with gr.Column(elem_id="practice"):
-        gr.Markdown("## Practice", elem_classes="brand")
-
         gr.Markdown("### ✍️ Write kanji")
         gr.HTML(DRAW_HTML, js_on_load=DRAW_JS, elem_id="kanji-pad", container=False)
 
@@ -145,3 +148,4 @@ def build() -> None:
             max_lines=20,
             placeholder="ここに入力してください… (type here)",
         )
+        speech.speak_bar(["#typing-pad textarea"], elem_id="typing-tts")

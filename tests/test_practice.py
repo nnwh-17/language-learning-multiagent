@@ -1,4 +1,4 @@
-"""The Practice page: a drawing box and a typing box, with no agents behind them."""
+"""The Practice tab: a drawing box and a typing box, with no agents behind them."""
 
 import gradio as gr
 
@@ -29,7 +29,21 @@ def test_pen_is_down_while_a_is_held_with_a_toggle_for_click_and_drag():
     assert 'class="pad-mode"' in practice.DRAW_HTML
 
 
-def test_practice_page_is_mounted_on_the_web_app():
+def test_typing_box_has_a_listen_bar_reading_it():
+    _, components = _components()
+
+    bar = components["typing-tts"]
+    assert "tts-play" in bar.value
+    assert '["#typing-pad textarea"]' in bar.js_on_load
+
+
+def test_pen_key_is_ignored_while_the_tab_is_closed():
+    assert "canvas.offsetParent === null" in practice.DRAW_JS
+
+
+def test_practice_is_a_tab_beside_read_and_translate():
     from jplearn.web import demo
 
-    assert ("practice", "Practice") in {(path, name) for path, name, _in_navbar in demo.pages}
+    labels = [b.label for b in demo.blocks.values() if isinstance(b, gr.Tab)]
+    assert labels.index("Practice") == labels.index("Read & translate") + 1
+    assert "practice" not in {path for path, _name, _in_navbar in demo.pages}

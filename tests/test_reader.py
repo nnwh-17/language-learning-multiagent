@@ -3,6 +3,7 @@ and the quiz and cards made from the highlights."""
 
 from types import SimpleNamespace
 
+import gradio as gr
 import pytest
 
 from jplearn import quiz_view, reader_view
@@ -249,3 +250,11 @@ async def test_add_to_anki_adds_exactly_the_previewed_cards(monkeypatch):
 def test_card_without_an_example():
     card = Card(kind="grammar", front="〜てしまう", reading="", meaning="regret", example="", example_translation="")
     assert card_fields(card)["Back"] == "regret"
+
+
+def test_listen_bar_reads_the_pane_then_the_text_box():
+    with gr.Blocks() as page:
+        reader_view.build()
+    bar = next(b for b in page.blocks.values() if getattr(b, "elem_id", None) == "reader-tts")
+
+    assert '["#reader-pane .reader-text", "#reader-input textarea"]' in bar.js_on_load

@@ -5,7 +5,9 @@ request and hands parts of it to specialists: sentence breakdowns, explanations 
 analogies, example sentences, interactive quizzes, reading material from the web, and Anki
 flashcards. A **Read & translate** tab lets you highlight what you don't know in a text and
 see it broken down, translate it yourself and get your mistakes explained, then quiz
-yourself or make cards from your highlights. Japanese facts come from a tokenizer (SudachiPy) and a local dictionary (JMdict) rather than the
+yourself or make cards from your highlights, and a **Practice** tab has a kanji writing pad
+and a typing box. Both tabs can read Japanese aloud with the browser's built-in voices (no
+model or extra package). Japanese facts come from a tokenizer (SudachiPy) and a local dictionary (JMdict) rather than the
 model's memory, and nothing is written to Anki until you approve it.
 
 ## Documentation
@@ -96,8 +98,9 @@ src/jplearn/
   grammar_notes.py   short notes on particles, auxiliaries and て-form patterns
   kana.py            romaji → hiragana, furigana rendering
   web.py, theme.py   Gradio web UI and its styling
-  practice.py        the web UI's Practice page (/practice): kanji drawing (hold A, or click
-                     and drag) and a plain typing box
+  practice.py        the web UI's Practice tab: kanji drawing (hold A, or click and drag)
+                     and a typing box
+  speech.py          Listen bar: text to speech with the browser's Web Speech API
   chat.py            terminal UI
 ```
 

@@ -2,7 +2,7 @@
 
 This frontend manages per-tab conversation and approval state, streams activity updates,
 and provides controls for viewing the agent graph and editing saved learner context. The
-Read & translate tab lives in reader_view.py.
+Read & translate tab lives in reader_view.py, the Practice tab in practice.py.
 """
 
 import time
@@ -334,7 +334,7 @@ def pick_example(evt: gr.SelectData) -> str:
 
 
 # Left: new chat and saved preferences. Centre: the conversation, and the Read & translate
-# tab. Right: what the agents are doing.
+# and Practice tabs. Right: what the agents are doing.
 with gr.Blocks(title="jplearn", fill_height=True) as demo:
     with gr.Sidebar(label="Menu", open=True, position="left", width=300) as menu:
         gr.Markdown("## 日本語 tutor", elem_classes="brand")
@@ -409,6 +409,9 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
         with gr.Tab("Read & translate", elem_id="reader-tab"):
             reader_view.build()
 
+        with gr.Tab("Practice", elem_id="practice-tab"):
+            practice.build()
+
     state = [chatbot, history, pending, status, log]
     out = [box, *state, architecture, log_view, approve_btn, reject_btn]
     # Every turn is followed by a save, so chats survive a reload or restart, and by a quiz
@@ -448,10 +451,6 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
         delete_context, ctx_pick, [ctx_active, ctx_pick, ctx_name, ctx_scope, ctx_text, ctx_status]
     )
     ctx_active.input(toggle_context, ctx_active, None)
-
-# A second page for writing and typing practice, with no agents
-with demo.route("Practice", "/practice"):
-    practice.build()
 
 if __name__ == "__main__":
     demo.launch(theme=THEME, css=CSS)

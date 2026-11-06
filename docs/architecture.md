@@ -151,7 +151,8 @@ the translation calls a model; everything else comes from the tokenizer, JMdict 
 
 1. **Start reading** shows the text (up to 1,000 characters) in the reading pane, a custom
    `gr.HTML` whose every piece of text is a span carrying its character offset (`data-s`).
-   Hovering a word shows its reading.
+   Hovering a word shows its reading. **🔊 Listen** under the text box reads the pane aloud,
+   or only the part selected in it (see [Text to speech](#text-to-speech-web-ui)).
 2. **Highlighting.** A key (default **H**, changeable with **Change key**, stored in the
    browser's localStorage) or the toolbar button toggles the highlighter cursor. The pane's
    script (`PANE_JS`, run by `js_on_load`) turns a mouse selection into code-point offsets
@@ -183,6 +184,24 @@ the translation calls a model; everything else comes from the tokenizer, JMdict 
 6. **Make flashcards** builds a card per highlighted item, with its sentence as the example.
    Nothing is written until **Add to Anki** is clicked; that click is the approval for
    exactly the cards in the preview.
+
+## Practice (web UI)
+
+The third tab, in [practice.py](../src/jplearn/practice.py), runs entirely in the browser:
+a kanji writing canvas (hold **A** and move the mouse, or switch to click and drag; the key
+is ignored while the tab is closed or a text box has focus) and a typing box with a
+**🔊 Listen** bar to hear what you typed.
+
+## Text to speech (web UI)
+
+[speech.py](../src/jplearn/speech.py)'s `speak_bar()` is a `gr.HTML` whose script uses the
+browser's Web Speech API (`speechSynthesis`), so it needs no Python package, model call or
+server request. It reads the first visible element matching its CSS selectors (a textarea
+by value, anything else by its text), or just the selected text inside it. Long text is
+queued sentence by sentence, since some browsers cut off long utterances. The speed and
+voice (Japanese voices only, natural/online ones first) are remembered in localStorage.
+Voices come from the OS or browser: on Windows, add Japanese under Settings > Time &
+language > Speech if none is listed.
 
 ## Saved chats (web UI)
 

@@ -1,6 +1,7 @@
 """The web UI's Read & translate tab: highlight what you don't know, translate, then study it.
 
-1. The learner pastes a text. It is shown with readings on hover (tokenizer, no model).
+1. The learner pastes a text. It is shown with readings on hover (tokenizer, no model), and
+   Listen reads it, or the selected part, aloud with the browser's own voice (speech.py).
 2. They press a key of their choice to switch to the highlight cursor and select the words
    and grammar they don't know, like using a highlighter pen. Selections snap to whole
    tokens, and each highlight is broken down straight away from the tokenizer, JMdict and
@@ -22,7 +23,7 @@ from typing import Literal
 import gradio as gr
 from pydantic import BaseModel
 
-from jplearn import quiz_view
+from jplearn import quiz_view, speech
 from jplearn.agents.analyzer import LOOKUP_POS
 from jplearn.agents.flashcards import Card, add_cards
 from jplearn.agents.quiz import BLANK, Question, Quiz
@@ -606,9 +607,11 @@ def build() -> None:
         elem_id="reader-offline",
     )
     text = gr.Textbox(
-        label="Japanese text", lines=4, max_lines=12,
+        label="Japanese text", lines=4, max_lines=12, elem_id="reader-input",
         placeholder="e.g. 昨日、友達と一緒に新しいレストランに行きました。",
     )
+    # Reads the reading pane once it is open (or just the selection in it), else the box
+    speech.speak_bar(["#reader-pane .reader-text", "#reader-input textarea"], elem_id="reader-tts")
     start_btn = gr.Button("Start reading", variant="primary")
     status = gr.Markdown()
 

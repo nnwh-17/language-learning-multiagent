@@ -88,7 +88,19 @@ footer {{ display: none !important; }}
 #chat .examples {{ grid-template-columns: repeat(2, 1fr) !important; max-width: 640px; margin: 0 auto; }}
 .hint, .hint * {{ text-align: center; font-size: 12px !important; color: var(--body-text-color-subdued) !important; }}
 
-/* Practice page: drawing box and typing box */
+/* Listen bar (text to speech) */
+.tts-bar {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 13px;
+  color: var(--body-text-color-subdued); }}
+.tts-bar button, .tts-bar select {{ border: 1px solid var(--border-color-primary); border-radius: 8px;
+  padding: 3px 10px; background: var(--background-fill-primary); color: var(--body-text-color); font-size: 13px; }}
+.tts-bar button {{ cursor: pointer; font-weight: 600; }}
+.tts-bar button:hover {{ background: var(--button-secondary-background-fill-hover); }}
+.tts-bar button:disabled {{ opacity: .5; cursor: not-allowed; }}
+.tts-field {{ display: inline-flex; align-items: center; gap: 6px; }}
+.tts-voice {{ max-width: 220px; }}
+.tts.tts-speaking .tts-play {{ border-color: var(--color-accent); color: var(--color-accent); }}
+
+/* Practice tab: drawing box and typing box */
 #practice {{ max-width: 800px; width: 100%; margin: 0 auto; gap: 12px; }}
 #practice .pad-toolbar {{ display: flex; justify-content: space-between; align-items: center; gap: 8px;
   margin-bottom: 6px; font-size: 13px; color: var(--body-text-color-subdued); }}
