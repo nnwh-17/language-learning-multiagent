@@ -104,8 +104,18 @@ translation = Node(
     "agent",
     "reviews your own translation (Read & translate tab)",
 )
+message_help = Node(
+    "message_help",
+    "Message helper",
+    "agent",
+    "translates a chat message and explains words from it (Translate / Words buttons)",
+)
 user = Node(
-    "user", "You", "user", "chat", calls=[("message", orchestrator), ("Read & translate", translation)]
+    "user",
+    "You",
+    "user",
+    "chat",
+    calls=[("message", orchestrator), ("Read & translate", translation), ("Translate / Words", message_help)],
 )
 
 ROOT = user
@@ -135,6 +145,7 @@ def check_against_agents() -> list[str]:
     from jplearn.agents.examples import examples_agent
     from jplearn.agents.explainer import explainer as explainer_agent
     from jplearn.agents.flashcards import flashcard_agent
+    from jplearn.agents.message_help import message_translator, word_helper
     from jplearn.agents.orchestrator import orchestrator as orchestrator_agent
     from jplearn.agents.quiz import quiz_agent
     from jplearn.agents.researcher import researcher as researcher_agent
@@ -151,6 +162,8 @@ def check_against_agents() -> list[str]:
         (explainer, explainer_agent),
         (quiz, quiz_agent),
         (translation, translation_checker),
+        (message_help, message_translator),
+        (message_help, word_helper),
     ]:
         # MCP toolsets only know their tools once connected, so compare function tools only
         actual = {name for ts in agent.toolsets for name in getattr(ts, "tools", {})}

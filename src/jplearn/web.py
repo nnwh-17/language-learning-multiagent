@@ -16,7 +16,7 @@ from jplearn.activity import Activity, LogEntry
 from jplearn.agents.orchestrator import describe_approval, orchestrator, stream_reply, tools_used
 from jplearn.architecture import Status, all_nodes, approval_targets, render_html
 from jplearn.kana import with_furigana
-from jplearn import quiz_view, reader_view
+from jplearn import message_help_view, quiz_view, reader_view
 from jplearn.log_view import render_log
 from jplearn.quiz_view import QuizSession, check_answer
 from jplearn.theme import CSS, THEME
@@ -367,11 +367,15 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
             ctx_status = gr.Markdown()
 
     with gr.Sidebar(label="Agents", open=False, position="right", width=460) as agents_panel:
-        gr.Markdown("### Agents")
-        graph_view = gr.Checkbox(label="Graph view", value=False)
-        architecture = gr.HTML(render_html())
-        gr.Markdown("### Activity")
-        log_view = gr.HTML(render_log([]))
+        with gr.Tabs(elem_id="side-tabs") as side_tabs:
+            with gr.Tab("Agents", id="agents"):
+                graph_view = gr.Checkbox(label="Graph view", value=False)
+                architecture = gr.HTML(render_html())
+                gr.Markdown("### Activity")
+                log_view = gr.HTML(render_log([]))
+            with gr.Tab("Message help", id=message_help_view.TAB_ID):
+                help_ui = message_help_view.build()
+                help_message, help_preview, help_translation, help_translate, help_words, help_notes = help_ui
 
     with gr.Column(elem_id="main", scale=1), gr.Tabs(elem_id="tabs"):
         with gr.Tab("Chat", elem_id="chat-tab", scale=1):
@@ -383,6 +387,7 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
                 examples=EXAMPLES,
                 buttons=["copy"],
             )
+            help_request, help_go = message_help_view.buttons_script()  # Translate / Words on each tutor message
             history = gr.State([])  # PydanticAI message history, one per browser tab
             pending = gr.State(None)  # DeferredToolRequests waiting for approval
             status = gr.State({})  # architecture node id -> status, for the side panel
@@ -435,6 +440,19 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
     quiz_next.click(advance_quiz, [quiz_state, *state, graph_view], [*out, quiz_state, *quiz_ui]).then(*save)
     quiz_end.click(finish_quiz, [quiz_state, *state, graph_view], [*out, quiz_state, *quiz_ui]).then(*save)
     graph_view.change(architecture_html, [status, graph_view], architecture)
+
+    # A message's Translate / Words button opens the side panel on that message
+    help_go.click(
+        message_help_view.open_panel,
+        [help_request, help_message],
+        [help_message, help_preview, help_translation, help_words, help_notes, agents_panel, side_tabs, menu],
+        queue=False,
+        show_progress="hidden",
+    ).then(
+        message_help_view.translate, [help_message, help_request, help_translation], help_translation, show_progress="hidden"
+    )
+    help_translate.click(message_help_view.translate, help_message, help_translation, show_progress="hidden")
+    help_words.submit(message_help_view.explain_words, [help_message, help_words], help_notes, show_progress="hidden")
 
     # Only one sidebar open at a time: opening either one closes the other
     def close_sidebar():
