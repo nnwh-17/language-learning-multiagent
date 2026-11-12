@@ -187,16 +187,24 @@ html[data-hl="on"] .reader-text .hl {{ cursor: pointer; }}
 #reader-tab button.secondary {{ border: 1px solid var(--border-color-primary); }}
 .reader-breakdown {{ font-size: 15px; line-height: 1.6; }}
 
-/* Message help: Translate / Words buttons on each tutor message, and the side panel tab */
+/* Message help: Listen / Translate / Words buttons on each tutor message, and the side panel tab */
 #chat .msg-help-btn {{ border: none; background: transparent; color: var(--block-label-text-color);
   border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center; cursor: pointer; }}
-#chat .msg-help-btn:hover {{ color: var(--color-accent); background: var(--block-background-fill); }}
+#chat .msg-help-btn:hover, #chat .msg-help-btn.speaking {{ color: var(--color-accent); background: var(--block-background-fill); }}
+#chat .msg-help-btn:disabled {{ opacity: .4; cursor: not-allowed; }}
 #msg-help-script {{ display: none; }}
 #msg-help-preview blockquote {{ margin: 0; font-size: 13px; color: var(--body-text-color-subdued); }}
 #msg-help-translation, #msg-help-notes {{ font-size: 15px; line-height: 1.6; }}
 #msg-help-translation strong {{ font-family: {SERIF}; font-size: 17px; font-weight: 500; }}
 #msg-help-notes h4 {{ font-family: {SERIF}; font-weight: 500; font-size: 20px; margin: 14px 0 2px; }}
 .msg-help-action {{ align-self: flex-start; width: auto !important; border: 1px solid var(--border-color-primary) !important; }}
+
+/* Check my Japanese: what you want to say + your attempt, above the composer */
+#attempt {{ border: 1px solid var(--border-color-primary) !important; border-radius: 16px !important;
+  background: var(--block-background-fill) !important; box-shadow: none !important; }}
+#attempt textarea {{ font-size: 15px; }}
+#attempt-ja textarea {{ font-family: {SERIF}; font-size: 17px; }}
+#attempt-check {{ align-self: flex-end; width: auto !important; min-width: 120px; border-radius: 10px; }}
 
 #approval {{ gap: 8px; justify-content: center; }}
 #approval button {{ max-width: 160px; border-radius: 10px; }}

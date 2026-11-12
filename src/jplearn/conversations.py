@@ -43,7 +43,10 @@ def _title(messages: list[dict]) -> str:
     content = first["content"]
     if isinstance(content, list):  # Gradio's [{"type": "text", "text": ...}] form
         content = " ".join(part.get("text", "") for part in content if isinstance(part, dict))
-    text = " ".join(str(content).split())
+    # Plain text: list items become "·" separators and bold markers go, e.g. a "Check my
+    # Japanese" message becomes "Check my Japanese · I want to say: ..."
+    content = re.sub(r"\n\s*[-*]\s+", " · ", str(content)).replace("**", "")
+    text = " ".join(content.split())
     return text if len(text) <= TITLE_LENGTH else text[: TITLE_LENGTH - 1] + "…"
 
 

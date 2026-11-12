@@ -5,11 +5,13 @@ and provides controls for viewing the agent graph and editing saved learner cont
 Read & translate tab lives in reader_view.py, the Practice tab in practice.py.
 """
 
+import re
 import time
+from pathlib import Path
 
 import gradio as gr
 from pydantic_ai import DeferredToolRequests, ToolDenied
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, ToolCallPart, UserPromptPart
 
 from jplearn import conversations, practice, user_context
 from jplearn.activity import Activity, LogEntry
@@ -23,6 +25,7 @@ from jplearn.theme import CSS, THEME
 from jplearn.user_context import AGENTS, ALL, ContextItem
 
 NEW_ITEM = "➕ New item"
+FAVICON = Path(__file__).with_name("favicon.svg")  # the browser tab's icon: Japan's flag
 
 
 # What each orchestrator tool is called in the chat, e.g. analyze_japanese -> Analyzer
@@ -142,17 +145,20 @@ def user_entry(text: str, detail: str = "") -> LogEntry:
     return LogEntry(time.time(), 0, "user", text, detail)
 
 
-def outputs(chat, history, pending, status, log, busy, graph, clear_box=False):
+def outputs(chat, history, pending, status, log, busy, graph, clear_box=False, box_value: str | None = None):
     """Values for [box, chatbot, history, pending, status, log, architecture, log_view,
-    approve_btn, reject_btn]. The composer is locked while a turn is running."""
+    approve_btn, reject_btn, attempt_check]. The composer and the Check my Japanese button
+    are locked while a turn is running."""
     waiting = pending is not None
     hint = "busy" if busy else "approval" if waiting else "idle"
     box = gr.Textbox(
-        interactive=not busy, placeholder=COMPOSER_HINTS[hint], **({"value": ""} if clear_box else {})
+        interactive=not busy,
+        placeholder=COMPOSER_HINTS[hint],
+        **({"value": box_value} if box_value is not None else {"value": ""} if clear_box else {}),
     )
     return (
         box, chat, history, pending, status, log, architecture_html(status, graph), render_log(log),
-        gr.Button(visible=waiting), gr.Button(visible=waiting),
+        gr.Button(visible=waiting), gr.Button(visible=waiting), gr.Button(interactive=not busy),
     )
 
 
@@ -175,6 +181,85 @@ async def respond(message: str, chat, history, pending, status, log, graph: bool
         turn = run_turn(chat, history, log, message_history=history, deferred_tool_results=results)
     async for update in turn:
         yield outputs(*update, graph, clear_box=True)
+
+
+ATTEMPT_TITLE = "**Check my Japanese**"
+
+
+def attempt_message(english: str, japanese: str) -> str:
+    """The chat message for a "Check my Japanese" attempt (the orchestrator knows this format)."""
+    return f"{ATTEMPT_TITLE}\n\n- **I want to say:** {english.strip()}\n- **My attempt:** {japanese.strip()}"
+
+
+async def check_attempt(english: str, japanese: str, chat, history, pending, status, log, graph: bool):
+    """Send what the learner wants to say and their Japanese for it as one chat turn.
+    Values for [*out, english box, japanese box]."""
+    missing = "your Japanese attempt" if not japanese.strip() else "what you want to say in English" if not english.strip() else ""
+    if missing:
+        gr.Warning(f"Write {missing} first.")
+        yield *outputs(chat, history, pending, status, log, False, graph), gr.skip(), gr.skip()
+        return
+    async for update in respond(attempt_message(english, japanese), chat, history, pending, status, log, graph):
+        yield *update, "", ""
+
+
+# --- undo the last message (Gradio's undo button on the last exchange) ---
+
+APPROVAL_MESSAGES = ("✅ Approved", "❌ Rejected")
+APPROVAL_TOOLS = all_nodes()["orchestrator"].approval
+
+
+def history_before_turn(history: list[ModelMessage], replies: list[dict]) -> list[ModelMessage]:
+    """`history` without the last turn's orchestrator run. `replies` are the chat messages
+    after the undone user message: a turn that failed added nothing to the history."""
+    if not history or any((m.get("metadata") or {}).get("title") == "Error details" for m in replies):
+        return history
+    last_run = history[-1].run_id
+    if last_run is not None:
+        return history[: next(i for i, m in enumerate(history) if m.run_id == last_run)]
+    # Older saved chats have no run ids: cut at the last thing the user typed
+    starts = [
+        i for i, m in enumerate(history)
+        if isinstance(m, ModelRequest) and any(isinstance(p, UserPromptPart) for p in m.parts)
+    ]
+    return history[: starts[-1]] if starts else []
+
+
+def pending_after(history: list[ModelMessage]) -> DeferredToolRequests | None:
+    """The approval request the history ends on, if any (after undoing an Approve or Reject)."""
+    if not history or not isinstance(history[-1], ModelResponse):
+        return None
+    calls = [p for p in history[-1].parts if isinstance(p, ToolCallPart) and p.tool_name in APPROVAL_TOOLS]
+    return DeferredToolRequests(approvals=calls) if calls else None
+
+
+def parse_attempt(message: str) -> tuple[str, str] | None:
+    """(english, japanese) from a "Check my Japanese" message, or None."""
+    if not message.startswith(ATTEMPT_TITLE):
+        return None
+    found = re.search(r"\*\*I want to say:\*\* (.*)\n- \*\*My attempt:\*\* (.*)$", message, re.S)
+    return (found[1], found[2]) if found else None
+
+
+def undo(evt: gr.UndoData, chat, history, pending, status, log, graph: bool):
+    """Remove the last user message and everything after it, from the chat and from what the
+    orchestrator remembers, and put the message back to edit and resend.
+    Values for [*out, attempt english, attempt japanese, attempt section]."""
+    index = evt.index if isinstance(evt.index, int) else evt.index[0]
+    undone = chat[index]["content"] if index < len(chat) else ""
+    if isinstance(undone, list):  # Gradio's [{"type": "text", "text": ...}] form
+        undone = "".join(part.get("text", "") for part in undone if isinstance(part, dict))
+    undone = undone if isinstance(undone, str) else ""
+    history = history_before_turn(history, chat[index + 1 :])
+    chat, pending = chat[:index], pending_after(history)
+    log.append(user_entry("Undo", undone))
+    attempt = parse_attempt(undone)
+    if attempt:  # back into the Check my Japanese boxes
+        box_value, extra = "", (*attempt, gr.Accordion(open=True))
+    else:
+        restore = undone not in APPROVAL_MESSAGES and not undone.startswith("**📝 Quiz finished")
+        box_value, extra = (undone if restore else ""), (gr.skip(), gr.skip(), gr.skip())
+    return *outputs(chat, history, pending, {}, log, False, graph, box_value=box_value), *extra
 
 
 async def decide(approved: bool, chat, history, pending, log, graph: bool):
@@ -335,7 +420,7 @@ def pick_example(evt: gr.SelectData) -> str:
 
 # Left: new chat and saved preferences. Centre: the conversation, and the Read & translate
 # and Practice tabs. Right: what the agents are doing.
-with gr.Blocks(title="jplearn", fill_height=True) as demo:
+with gr.Blocks(title="日本語の勉強", fill_height=True) as demo:
     with gr.Sidebar(label="Menu", open=True, position="left", width=300) as menu:
         gr.Markdown("## 日本語 tutor", elem_classes="brand")
         clear = gr.Button("＋  New chat", elem_id="new-chat", variant="secondary")
@@ -399,6 +484,22 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
             with gr.Row(elem_id="approval"):
                 approve_btn = gr.Button("Approve", variant="primary", visible=False)
                 reject_btn = gr.Button("Reject", variant="secondary", visible=False)
+            with gr.Accordion("✍️ Check my Japanese", open=False, elem_id="attempt") as attempt_section:
+                with gr.Row(equal_height=True):
+                    attempt_en = gr.Textbox(
+                        label="What I want to say (English)",
+                        placeholder="e.g. I went to the park with my friend yesterday.",
+                        lines=2,
+                        max_lines=6,
+                    )
+                    attempt_ja = gr.Textbox(
+                        elem_id="attempt-ja",
+                        label="My attempt (Japanese)",
+                        placeholder="e.g. きのう友達と公園に行きました。",
+                        lines=2,
+                        max_lines=6,
+                    )
+                attempt_check = gr.Button("Check", variant="primary", size="sm", elem_id="attempt-check")
             box = gr.Textbox(
                 elem_id="composer",
                 placeholder=COMPOSER_HINTS["idle"],
@@ -418,12 +519,15 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
             practice.build()
 
     state = [chatbot, history, pending, status, log]
-    out = [box, *state, architecture, log_view, approve_btn, reject_btn]
+    out = [box, *state, architecture, log_view, approve_btn, reject_btn, attempt_check]
     # Every turn is followed by a save, so chats survive a reload or restart, and by a quiz
     # sync, which opens a quiz the turn started (or the open chat's unfinished one)
     save = (save_chat, [chat_id, chatbot, history, pending], [chat_id, chats])
     sync = (sync_quiz, [history, quiz_state], [quiz_state, *quiz_ui])
     box.submit(respond, [box, *state, graph_view], out).then(*save).then(*sync)
+    attempt = (check_attempt, [attempt_en, attempt_ja, *state, graph_view], [*out, attempt_en, attempt_ja])
+    attempt_check.click(*attempt).then(*save).then(*sync)
+    chatbot.undo(undo, [*state, graph_view], [*out, attempt_en, attempt_ja, attempt_section]).then(*save).then(*sync)
     chatbot.example_select(pick_example, None, box).then(respond, [box, *state, graph_view], out).then(*save).then(*sync)
     approve_btn.click(approve, [*state, graph_view], out).then(*save).then(*sync)
     reject_btn.click(reject, [*state, graph_view], out).then(*save).then(*sync)
@@ -471,4 +575,10 @@ with gr.Blocks(title="jplearn", fill_height=True) as demo:
     ctx_active.input(toggle_context, ctx_active, None)
 
 if __name__ == "__main__":
-    demo.launch(theme=THEME, css=CSS)
+    # Gradio serves the icon at /favicon.ico; the link tells the browser it's an SVG
+    demo.launch(
+        theme=THEME,
+        css=CSS,
+        favicon_path=str(FAVICON),
+        head='<link rel="icon" type="image/svg+xml" href="./favicon.ico">',
+    )

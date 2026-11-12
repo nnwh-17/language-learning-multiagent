@@ -128,7 +128,7 @@ async def test_pending_approval_can_be_approved_after_reload(monkeypatch):
 
 def _shown(values):
     """Pick (chat window, pending, approve button, chat id) out of open_chat's values."""
-    box, chat, history, pending, status, log, _arch, _log_html, approve_btn, _reject_btn, chat_id = values[:11]
+    box, chat, history, pending, status, log, _arch, _log_html, approve_btn, _reject_btn, _check_btn, chat_id = values[:12]
     return chat, pending, approve_btn, chat_id
 
 
@@ -163,3 +163,8 @@ def test_delete_chat_starts_a_new_one():
     chat, _pending, _btn, new_id = _shown(values)
     assert (chat, new_id) == ([], None)
     assert values[-1].choices == []  # the sidebar list is empty again
+
+
+def test_a_title_is_plain_text():
+    message = "**Check my Japanese**\n\n- **I want to say:** I went to the park.\n- **My attempt:** 公園に行きました。"
+    assert conversations._title([{"role": "user", "content": message}]) == "Check my Japanese · I want to say: I went to th…"

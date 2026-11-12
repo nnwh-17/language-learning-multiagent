@@ -1,6 +1,7 @@
-"""Translate and Words buttons on each tutor message, and the side panel they open.
+"""Listen, Translate and Words buttons on each tutor message, and the side panel they open.
 
-A script adds two buttons next to each tutor message's copy button. Clicking one sends the
+A script adds three buttons next to each tutor message's copy button. Listen reads the
+message's Japanese aloud in the browser (no server call). Translate and Words send the
 message's text (without furigana or the collapsed agent steps) to the server through a
 hidden textbox and button, and the server opens the side panel on its Message help tab:
 
@@ -157,7 +158,13 @@ async def explain_words(text: str, words: str):
     yield words_markdown(result.output)
 
 
-# Icons from Lucide (ISC licence): "languages" and "book-open"
+# Icons from Lucide (ISC licence): "volume-2", "square", "languages" and "book-open"
+LISTEN_ICON = (
+    '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6'
+    'a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/>'
+    '<path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>'
+)
+STOP_ICON = '<rect x="6" y="6" width="12" height="12" rx="1"/>'
 TRANSLATE_ICON = (
     '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/>'
     '<path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>'
@@ -167,9 +174,12 @@ WORDS_ICON = (
     'a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>'
 )
 
-# Watches the chat and gives every tutor message's button row the two extra buttons.
-# Gradio groups a run of tutor messages (agent steps + reply) into one row with one set of
-# buttons, so a button sends the text of its whole row, minus the collapsed steps.
+# Watches the chat and gives every tutor message's button row three extra buttons. Gradio
+# groups a run of tutor messages (agent steps + reply) into one row with one set of buttons,
+# so a button uses the text of its whole row, minus the collapsed steps.
+#
+# Listen reads only the Japanese in the message (or in the selection, if any) with the
+# browser's speech engine, using the voice and speed picked in a Listen bar (speech.py).
 BUTTONS_JS = """
 const ICONS = __ICONS__;
 const svg = (paths) => '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" '
@@ -223,16 +233,75 @@ function button(mode, title, row) {
   b.dataset.mode = mode;
   b.innerHTML = svg(ICONS[mode]);
   b.addEventListener('pointerdown', () => { const r = rowOf(b.closest('.message-buttons')); selection = r ? selectionIn(r) : ''; });
-  b.addEventListener('click', () => { const r = rowOf(b.closest('.message-buttons')); if (r) send(mode, r); });
+  b.addEventListener('click', () => {
+    const r = rowOf(b.closest('.message-buttons'));
+    if (r) mode === 'listen' ? listen(b, r) : send(mode, r);
+  });
   return b;
 }
+// --- Listen: read the Japanese parts aloud ---
+const synth = window.speechSynthesis;
+const JAPANESE = /[぀-ヿ㐀-鿿豈-﫿々〆ヶ]/;
+const RUN = /[　-〿぀-ヿ㐀-鿿豈-﫿！-｠々〆ヶー0-9０-９〜～]+/g;
+const LISTEN_TITLE = 'Listen to the Japanese';
+let playing = null;  // the Listen button whose message is being read
+
+function japaneseParts(text) {
+  return (text.match(RUN) || []).map((s) => s.trim()).filter((s) => JAPANESE.test(s));
+}
+function stored(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function japaneseVoice() {
+  const voices = synth.getVoices().filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith('ja'));
+  const rank = (v) => /natural|online|neural|google/i.test(v.name) ? 0 : v.localService ? 1 : 2;
+  const saved = stored('jplearn-tts-voice-ja-JP');  // the voice picked in a Listen bar
+  return voices.find((v) => v.voiceURI === saved) || voices.sort((a, b) => rank(a) - rank(b))[0] || null;
+}
+function showPlaying(b, on) {
+  b.innerHTML = svg(on ? ICONS.stop : ICONS.listen);
+  b.title = on ? 'Stop' : LISTEN_TITLE;
+  b.setAttribute('aria-label', b.title);
+  b.classList.toggle('speaking', on);
+  playing = on ? b : (playing === b ? null : playing);
+}
+function listen(b, row) {
+  const wasPlaying = playing === b;
+  if (playing) showPlaying(playing, false);
+  synth.cancel();  // one voice at a time, across the page
+  if (wasPlaying) return;
+  const parts = japaneseParts(selection || messageText(row));
+  selection = '';
+  if (!parts.length) {
+    b.title = 'No Japanese to read';
+    setTimeout(() => { if (playing !== b) b.title = LISTEN_TITLE; }, 2000);
+    return;
+  }
+  const voice = japaneseVoice();
+  const rate = +(stored('jplearn-tts-rate') || 0.9);
+  parts.forEach((part, i) => {
+    const u = new SpeechSynthesisUtterance(part);
+    u.lang = voice ? voice.lang : 'ja-JP';
+    if (voice) u.voice = voice;
+    u.rate = rate;
+    if (i === parts.length - 1) u.onend = () => showPlaying(b, false);
+    u.onerror = () => showPlaying(b, false);
+    synth.speak(u);
+  });
+  showPlaying(b, true);
+}
+function listenButton() {
+  const b = button('listen', LISTEN_TITLE);
+  if (!synth) { b.disabled = true; b.title = 'This browser has no text to speech'; }
+  return b;
+}
+
 function addButtons() {
   for (const buttons of document.querySelectorAll('#chat .message-buttons-left')) {
     const wrap = buttons.querySelector('.icon-button-wrapper');
     if (!wrap || wrap.querySelector('.msg-help-btn') || !rowOf(buttons)) continue;
-    wrap.append(button('translate', 'Translate to English'), button('words', 'Explain words from this message'));
+    wrap.append(listenButton(), button('translate', 'Translate to English'), button('words', 'Explain words from this message'));
   }
 }
+if (synth) synth.getVoices();  // start loading the voice list
 new MutationObserver(addButtons).observe(document.body, { childList: true, subtree: true });
 addButtons();
 """
@@ -242,7 +311,7 @@ def buttons_script() -> tuple[gr.Textbox, gr.Button]:
     """Put in the Chat tab: an invisible element whose script adds the buttons to the chat's
     messages, and the hidden textbox and button the script sends a message through. They sit
     here, not in the side panel, because a closed panel's contents aren't on the page."""
-    icons = json.dumps({"translate": TRANSLATE_ICON, "words": WORDS_ICON})
+    icons = json.dumps({"listen": LISTEN_ICON, "stop": STOP_ICON, "translate": TRANSLATE_ICON, "words": WORDS_ICON})
     gr.HTML("", js_on_load=BUTTONS_JS.replace("__ICONS__", icons), elem_id="msg-help-script", container=False)
     request = gr.Textbox(elem_id="msg-help-request", visible="hidden")
     go = gr.Button("open", elem_id="msg-help-go", visible="hidden")
